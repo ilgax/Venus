@@ -7,20 +7,25 @@ import dev.xcyn.venus.auth.PendingApproval
 import dev.xcyn.venus.auth.PendingSession
 import dev.xcyn.venus.auth.SessionManager
 import dev.xcyn.venus.commands.VenusCommand
+import dev.xcyn.venus.config.VenusConfig
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket
 import net.minecraft.network.protocol.common.custom.DiscardedPayload
 import net.minecraft.resources.Identifier
 import org.bukkit.craftbukkit.entity.CraftPlayer
 import org.bukkit.entity.Player
+import org.bukkit.event.EventHandler
+import org.bukkit.event.Listener
+import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.plugin.java.JavaPlugin
 import org.bukkit.plugin.messaging.PluginMessageListener
 import java.util.Base64
 
-class VenusPlugin : JavaPlugin(), PluginMessageListener {
+class VenusPlugin : JavaPlugin(), PluginMessageListener, Listener {
 
     lateinit var keyManager: KeyManager
 
     override fun onEnable() {
+        VenusConfig.load(this)
         logger.info("Venus enabled")
         keyManager = KeyManager(dataFolder)
         keyManager.loadOrGenerate()
@@ -28,6 +33,7 @@ class VenusPlugin : JavaPlugin(), PluginMessageListener {
         AuthorizedKeys.init(dataFolder)
 
         registerCommand("venus", VenusCommand(this))
+        server.pluginManager.registerEvents(this, this)
 
         server.messenger.registerIncomingPluginChannel(this, "venus:hello", this)
         server.messenger.registerIncomingPluginChannel(this, "venus:key", this)
@@ -58,6 +64,13 @@ class VenusPlugin : JavaPlugin(), PluginMessageListener {
         }
     }
 
+    @EventHandler
+    fun onPlayerQuit(event: PlayerQuitEvent) {
+        val uuid = event.player.uniqueId
+        SessionManager.deactivate(uuid)
+        logger.info("Venus session deactivated for ${event.player.name}")
+    }
+
     private fun sendServerPublicKey(player: Player) {
         val keyBytes = keyManager.publicKeyBase64.toByteArray(Charsets.UTF_8)
         val id = Identifier.fromNamespaceAndPath("venus", "key")
@@ -80,6 +93,23 @@ class VenusPlugin : JavaPlugin(), PluginMessageListener {
             return
         }
 
+        if (server.onlineMode && VenusConfig.cacheVerifiedUuid) {
+            val cachedKey = SessionManager.getCachedKey(player.uniqueId)
+            if (cachedKey != null) {
+                if (cachedKey != clientPublicKeyBase64) {
+                    logger.warning("UUID cache mismatch for ${player.name} — key changed, falling through to full auth")
+                    SessionManager.clearUUIDCache(player.uniqueId)
+                } else {
+                    logger.info("UUID cache hit for ${player.name} — skipping authorized_keys check")
+                    val challenge = Handshake.generateChallenge()
+                    val serverSig = Handshake.sign(challenge, keyManager.privateKey)
+                    SessionManager.addPending(player.uniqueId, PendingSession(clientPublicKey, challenge))
+                    sendAuthChallenge(player, challenge, serverSig)
+                    return
+                }
+            }
+        }
+
         if (AuthorizedKeys.isAuthorized(clientPublicKeyBase64)) {
             val challenge = Handshake.generateChallenge()
             val serverSig = Handshake.sign(challenge, keyManager.privateKey)
@@ -87,6 +117,11 @@ class VenusPlugin : JavaPlugin(), PluginMessageListener {
             sendAuthChallenge(player, challenge, serverSig)
             logger.info("Authorized key recognized for ${player.name} — sending challenge")
         } else {
+            if (AuthorizedKeys.count() >= VenusConfig.maxUsers) {
+                logger.warning("${player.name} tried to connect to Venus but max_users (${VenusConfig.maxUsers}) reached — rejecting.")
+                return
+            }
+
             SessionManager.addPendingApproval(
                 player.uniqueId,
                 PendingApproval(clientPublicKey, clientPublicKeyBase64)
@@ -98,7 +133,7 @@ class VenusPlugin : JavaPlugin(), PluginMessageListener {
                     SessionManager.removePendingApproval(player.uniqueId)
                     logger.info("Venus request from ${player.name} timed out.")
                 }
-            }, 60 * 20L)
+            }, (VenusConfig.sessionTimeoutSeconds * 20L))
         }
     }
 
@@ -144,6 +179,12 @@ class VenusPlugin : JavaPlugin(), PluginMessageListener {
 
         SessionManager.removePending(player.uniqueId)
         SessionManager.activate(player.uniqueId, pending.clientPublicKey)
+
+        if (server.onlineMode && VenusConfig.cacheVerifiedUuid) {
+            SessionManager.cacheUUID(player.uniqueId,
+                Base64.getEncoder().encodeToString(pending.clientPublicKey.encoded))
+        }
+
         logger.info("${player.name} authenticated successfully!")
         sendReady(player)
     }

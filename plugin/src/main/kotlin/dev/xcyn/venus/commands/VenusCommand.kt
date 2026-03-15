@@ -19,7 +19,7 @@ class VenusCommand(private val plugin: VenusPlugin) : BasicCommand {
         }
 
         if (args.isEmpty()) {
-            sender.sendMessage("Usage: /venus allow | /venus deny")
+            sender.sendMessage("Usage: venus allow | venus deny")
             return
         }
 

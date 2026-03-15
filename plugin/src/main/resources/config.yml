@@ -1,0 +1,9 @@
+# Venus configuration
+# max_users: maximum number of concurrent active Venus sessions
+max_users: 1
+
+# session_timeout_seconds: grace period before dropping session on disconnect
+session_timeout_seconds: 60
+
+# cache_verified_uuid: cache player UUID -> key fingerprint for faster re-auth on online mode servers
+cache_verified_uuid: true

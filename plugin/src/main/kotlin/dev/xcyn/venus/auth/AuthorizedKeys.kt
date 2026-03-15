@@ -22,4 +22,9 @@ object AuthorizedKeys {
     fun authorize(publicKeyBase64: String, comment: String) {
         keysFile.appendText("$publicKeyBase64 $comment\n")
     }
+
+    fun count(): Int {
+        return keysFile.readLines().count { it.isNotBlank() }
+    }
+
 }
