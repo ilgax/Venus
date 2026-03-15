@@ -22,8 +22,14 @@ data class PendingSession(
     }
 }
 
+data class PendingApproval(
+    val clientPublicKey: PublicKey,
+    val clientPublicKeyBase64: String
+)
+
 object SessionManager {
     private val pendingSessions = ConcurrentHashMap<UUID, PendingSession>()
+    private val pendingApprovals = ConcurrentHashMap<UUID, PendingApproval>()
     private val activeSessions = ConcurrentHashMap<UUID, PublicKey>()
 
     fun addPending(uuid: UUID, session: PendingSession) {
@@ -34,6 +40,16 @@ object SessionManager {
 
     fun removePending(uuid: UUID) = pendingSessions.remove(uuid)
 
+    fun addPendingApproval(uuid: UUID, approval: PendingApproval) {
+        pendingApprovals[uuid] = approval
+    }
+
+    fun getPendingApproval(uuid: UUID): PendingApproval? = pendingApprovals[uuid]
+
+    fun removePendingApproval(uuid: UUID) = pendingApprovals.remove(uuid)
+
+    fun getNextPendingApproval(): Map.Entry<UUID, PendingApproval>? = pendingApprovals.entries.firstOrNull()
+
     fun activate(uuid: UUID, publicKey: PublicKey) {
         activeSessions[uuid] = publicKey
     }
@@ -43,5 +59,6 @@ object SessionManager {
     fun deactivate(uuid: UUID) {
         activeSessions.remove(uuid)
         pendingSessions.remove(uuid)
+        pendingApprovals.remove(uuid)
     }
 }

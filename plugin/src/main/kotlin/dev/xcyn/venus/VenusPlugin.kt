@@ -1,9 +1,12 @@
 package dev.xcyn.venus
 
+import dev.xcyn.venus.auth.AuthorizedKeys
 import dev.xcyn.venus.auth.Handshake
 import dev.xcyn.venus.auth.KeyManager
+import dev.xcyn.venus.auth.PendingApproval
 import dev.xcyn.venus.auth.PendingSession
 import dev.xcyn.venus.auth.SessionManager
+import dev.xcyn.venus.commands.VenusCommand
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket
 import net.minecraft.network.protocol.common.custom.DiscardedPayload
 import net.minecraft.resources.Identifier
@@ -22,6 +25,9 @@ class VenusPlugin : JavaPlugin(), PluginMessageListener {
         keyManager = KeyManager(dataFolder)
         keyManager.loadOrGenerate()
         logger.info("Server keypair loaded")
+        AuthorizedKeys.init(dataFolder)
+
+        registerCommand("venus", VenusCommand(this))
 
         server.messenger.registerIncomingPluginChannel(this, "venus:hello", this)
         server.messenger.registerIncomingPluginChannel(this, "venus:key", this)
@@ -63,36 +69,48 @@ class VenusPlugin : JavaPlugin(), PluginMessageListener {
 
     private fun handleClientKey(player: Player, clientPublicKeyBase64: String) {
         if (clientPublicKeyBase64.isBlank()) {
-            logger.info("Empty client key from ${player.name}")
+            logger.warning("Empty client key from ${player.name}")
             return
         }
+
         val clientPublicKey = try {
             Handshake.decodePublicKey(clientPublicKeyBase64)
         } catch (e: Exception) {
-            logger.info("Invalid client key from ${player.name}: ${e.message}")
+            logger.warning("Invalid client key from ${player.name}: ${e.message}")
             return
         }
 
-        val challenge = Handshake.generateChallenge()
-        val serverSig = Handshake.sign(challenge, keyManager.privateKey)
+        if (AuthorizedKeys.isAuthorized(clientPublicKeyBase64)) {
+            val challenge = Handshake.generateChallenge()
+            val serverSig = Handshake.sign(challenge, keyManager.privateKey)
+            SessionManager.addPending(player.uniqueId, PendingSession(clientPublicKey, challenge))
+            sendAuthChallenge(player, challenge, serverSig)
+            logger.info("Authorized key recognized for ${player.name} — sending challenge")
+        } else {
+            SessionManager.addPendingApproval(
+                player.uniqueId,
+                PendingApproval(clientPublicKey, clientPublicKeyBase64)
+            )
+            logger.info("${player.name} wants to connect to Venus. Type 'venus allow' or 'venus deny'")
 
-        SessionManager.addPending(
-            player.uniqueId,
-            PendingSession(clientPublicKey, challenge)
-        )
-
-        sendAuthChallenge(player, challenge, serverSig)
-        logger.info("Sent auth challenge to ${player.name}")
+            server.scheduler.runTaskLater(this, Runnable {
+                if (SessionManager.getPendingApproval(player.uniqueId) != null) {
+                    SessionManager.removePendingApproval(player.uniqueId)
+                    logger.info("Venus request from ${player.name} timed out.")
+                }
+            }, 60 * 20L)
+        }
     }
+
     private fun sendAuthChallenge(player: Player, challenge: ByteArray, serverSig: ByteArray) {
         val challengeB64 = Base64.getEncoder().encodeToString(challenge)
         val sigB64 = Base64.getEncoder().encodeToString(serverSig)
         val payload = "$challengeB64.$sigB64".toByteArray(Charsets.UTF_8)
-
         val id = Identifier.fromNamespaceAndPath("venus", "auth")
         val packet = ClientboundCustomPayloadPacket(DiscardedPayload(id, payload))
         (player as CraftPlayer).handle.connection.send(packet)
     }
+
     private fun handleAuthResponse(player: Player, response: String) {
         val parts = response.split(".")
         if (parts.size != 2) {
@@ -128,14 +146,16 @@ class VenusPlugin : JavaPlugin(), PluginMessageListener {
         SessionManager.activate(player.uniqueId, pending.clientPublicKey)
         logger.info("${player.name} authenticated successfully!")
         sendReady(player)
-
-        // TODO: send venus:ready, start session
     }
 
-    private fun sendReady(player: Player) {
+    fun sendReady(player: Player) {
         val id = Identifier.fromNamespaceAndPath("venus", "ready")
         val packet = ClientboundCustomPayloadPacket(DiscardedPayload(id, ByteArray(0)))
         (player as CraftPlayer).handle.connection.send(packet)
         logger.info("Sent venus:ready to ${player.name}")
+    }
+
+    fun sendAuthChallengeTo(player: Player, challenge: ByteArray, serverSig: ByteArray) {
+        sendAuthChallenge(player, challenge, serverSig)
     }
 }
