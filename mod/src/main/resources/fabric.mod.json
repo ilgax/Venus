@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "id": "venus",
+  "version": "0.2.0-SNAPSHOT",
+  "name": "Venus",
+  "description": "In-game server management. No extra ports. Works everywhere.",
+  "authors": [
+    "xcyn"
+  ],
+  "contact": {
+    "sources": "https://github.com/ilgax/venus",
+    "issues": "https://github.com/ilgax/venus/issues"
+  },
+  "license": "AGPL-3.0-or-later",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      {
+        "adapter": "kotlin",
+        "value": "dev.xcyn.venus.VenusMod"
+      }
+    ]
+  },
+  "mixins": [],
+  "depends": {
+    "fabricloader": ">=0.16.9",
+    "fabric-api": "*",
+    "fabric-language-kotlin": ">=1.13.0",
+    "minecraft": "~1.21.11",
+    "java": ">=21"
+  }
+}
