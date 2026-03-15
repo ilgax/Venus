@@ -1,7 +1,7 @@
 name: Venus
-version: '${version}'
-main: dev.xcyn.venus.Venus
-api-version: '1.21'
+version: "${version}"
+main: dev.xcyn.venus.VenusPlugin
+api-version: "1.21"
 description: In-game server management over plugin messaging channels
 authors:
   - xcyn
