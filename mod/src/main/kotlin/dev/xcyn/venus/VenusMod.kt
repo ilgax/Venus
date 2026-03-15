@@ -4,6 +4,7 @@ import dev.xcyn.venus.auth.Handshake
 import dev.xcyn.venus.auth.KeyManager
 import dev.xcyn.venus.network.VenusRawAuthPayload
 import dev.xcyn.venus.network.VenusRawPayload
+import dev.xcyn.venus.network.VenusRawReadyPayload
 import net.fabricmc.api.ClientModInitializer
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking
@@ -78,6 +79,7 @@ class VenusMod : ClientModInitializer {
         PayloadTypeRegistry.playC2S().register(AuthResponsePayload.TYPE, AuthResponsePayload.CODEC)
         PayloadTypeRegistry.playS2C().register(VenusRawPayload.TYPE, VenusRawPayload.CODEC)
         PayloadTypeRegistry.playS2C().register(VenusRawAuthPayload.TYPE, VenusRawAuthPayload.CODEC)
+        PayloadTypeRegistry.playS2C().register(VenusRawReadyPayload.TYPE, VenusRawReadyPayload.CODEC)
 
         ClientPlayNetworking.registerGlobalReceiver(VenusRawPayload.TYPE) { payload, _ ->
             val serverKeyBase64 = payload.bytes().toString(Charsets.UTF_8)
@@ -104,6 +106,11 @@ class VenusMod : ClientModInitializer {
             val response = "$challengeB64.${Base64.getEncoder().encodeToString(clientSig)}"
             ClientPlayNetworking.send(AuthResponsePayload(response))
             println("Venus: sent auth response")
+        }
+
+        ClientPlayNetworking.registerGlobalReceiver(VenusRawReadyPayload.TYPE) { _, _ ->
+            println("Venus: session active!")
+            // TODO: open panel UI
         }
 
         ClientPlayConnectionEvents.JOIN.register { _, _, _ ->

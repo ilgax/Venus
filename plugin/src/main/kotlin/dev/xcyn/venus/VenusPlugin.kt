@@ -127,7 +127,15 @@ class VenusPlugin : JavaPlugin(), PluginMessageListener {
         SessionManager.removePending(player.uniqueId)
         SessionManager.activate(player.uniqueId, pending.clientPublicKey)
         logger.info("${player.name} authenticated successfully!")
+        sendReady(player)
 
         // TODO: send venus:ready, start session
+    }
+
+    private fun sendReady(player: Player) {
+        val id = Identifier.fromNamespaceAndPath("venus", "ready")
+        val packet = ClientboundCustomPayloadPacket(DiscardedPayload(id, ByteArray(0)))
+        (player as CraftPlayer).handle.connection.send(packet)
+        logger.info("Sent venus:ready to ${player.name}")
     }
 }
