@@ -67,6 +67,23 @@ class VenusMod : ClientModInitializer {
         override fun type() = TYPE
     }
 
+    data class ErrorPayload(val reason: String) : CustomPacketPayload {
+        companion object {
+            val TYPE = CustomPacketPayload.Type<ErrorPayload>(
+                Identifier.fromNamespaceAndPath("venus", "error")
+            )
+            val CODEC: StreamCodec<FriendlyByteBuf, ErrorPayload> = StreamCodec.of(
+                { buf, payload -> buf.writeBytes(payload.reason.toByteArray(Charsets.UTF_8)) },
+                { buf ->
+                    val bytes = ByteArray(buf.readableBytes())
+                    buf.readBytes(bytes)
+                    ErrorPayload(bytes.toString(Charsets.UTF_8))
+                }
+            )
+        }
+        override fun type() = TYPE
+    }
+
     override fun onInitializeClient() {
         println("Venus mod loaded!")
 
@@ -79,6 +96,7 @@ class VenusMod : ClientModInitializer {
         PayloadTypeRegistry.playC2S().register(HelloPayload.TYPE, HelloPayload.CODEC)
         PayloadTypeRegistry.playC2S().register(ClientKeyPayload.TYPE, ClientKeyPayload.CODEC)
         PayloadTypeRegistry.playC2S().register(AuthResponsePayload.TYPE, AuthResponsePayload.CODEC)
+        PayloadTypeRegistry.playC2S().register(ErrorPayload.TYPE, ErrorPayload.CODEC)
         PayloadTypeRegistry.playS2C().register(VenusRawPayload.TYPE, VenusRawPayload.CODEC)
         PayloadTypeRegistry.playS2C().register(VenusRawAuthPayload.TYPE, VenusRawAuthPayload.CODEC)
         PayloadTypeRegistry.playS2C().register(VenusRawReadyPayload.TYPE, VenusRawReadyPayload.CODEC)
@@ -99,6 +117,7 @@ class VenusMod : ClientModInitializer {
                 ServerKeyStore.storeKey(host, port, serverKeyBase64)
             } else if (storedKey != serverKeyBase64) {
                 println("Venus: WARNING — server key mismatch for $host:$port! Possible MITM. Aborting.")
+                ClientPlayNetworking.send(ErrorPayload("mitm_key_mismatch"))
                 return@registerGlobalReceiver
             } else {
                 println("Venus: server key verified for $host:$port")
@@ -133,7 +152,8 @@ class VenusMod : ClientModInitializer {
 
             val serverPublicKey = Handshake.decodePublicKey(storedKeyB64)
             if (!Handshake.verify(challenge, serverSig, serverPublicKey)) {
-                println("Venus: server signature verification failed — possible MITM!")
+                println("Venus: WARNING — server signature verification failed! Possible MITM. Aborting.")
+                ClientPlayNetworking.send(ErrorPayload("mitm_sig_fail"))
                 return@registerGlobalReceiver
             }
 

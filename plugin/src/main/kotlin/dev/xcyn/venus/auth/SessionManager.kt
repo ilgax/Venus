@@ -55,6 +55,8 @@ object SessionManager {
         activeSessions[uuid] = publicKey
     }
 
+    fun isActive(uuid: UUID) = activeSessions.containsKey(uuid)
+
     fun deactivate(uuid: UUID) {
         activeSessions.remove(uuid)
         pendingSessions.remove(uuid)

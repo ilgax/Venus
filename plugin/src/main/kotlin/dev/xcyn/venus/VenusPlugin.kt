@@ -38,6 +38,7 @@ class VenusPlugin : JavaPlugin(), PluginMessageListener, Listener {
         server.messenger.registerIncomingPluginChannel(this, "venus:hello", this)
         server.messenger.registerIncomingPluginChannel(this, "venus:key", this)
         server.messenger.registerIncomingPluginChannel(this, "venus:auth", this)
+        server.messenger.registerIncomingPluginChannel(this, "venus:error", this)
     }
 
     override fun onDisable() {
@@ -45,6 +46,7 @@ class VenusPlugin : JavaPlugin(), PluginMessageListener, Listener {
         server.messenger.unregisterIncomingPluginChannel(this, "venus:hello")
         server.messenger.unregisterIncomingPluginChannel(this, "venus:key")
         server.messenger.unregisterIncomingPluginChannel(this, "venus:auth")
+        server.messenger.unregisterIncomingPluginChannel(this, "venus:error")
     }
 
     override fun onPluginMessageReceived(channel: String, player: Player, message: ByteArray) {
@@ -61,14 +63,28 @@ class VenusPlugin : JavaPlugin(), PluginMessageListener, Listener {
                 val response = message.toString(Charsets.UTF_8)
                 handleAuthResponse(player, response)
             }
+            "venus:error" -> {
+                when (val reason = message.toString(Charsets.UTF_8)) {
+                    "mitm_key_mismatch" -> logger.warning("${player.name} rejected connection — server key mismatch on client side (possible MITM)")
+                    "mitm_sig_fail" -> logger.warning("${player.name} rejected connection — server signature verification failed on client side (possible MITM)")
+                    else -> logger.warning("${player.name} sent error: $reason")
+                }
+            }
         }
     }
 
     @EventHandler
     fun onPlayerQuit(event: PlayerQuitEvent) {
         val uuid = event.player.uniqueId
-        SessionManager.deactivate(uuid)
-        logger.info("Venus session deactivated for ${event.player.name}")
+        if (!SessionManager.isActive(uuid)) return
+
+        logger.info("${event.player.name} disconnected — starting ${VenusConfig.sessionTimeoutSeconds}s Venus session timeout")
+
+        server.scheduler.runTaskLater(this, Runnable {
+            if (!SessionManager.isActive(uuid)) return@Runnable
+            SessionManager.deactivate(uuid)
+            logger.info("Venus session expired for ${event.player.name}")
+        }, (VenusConfig.sessionTimeoutSeconds * 20L))
     }
 
     private fun sendServerPublicKey(player: Player) {

@@ -16,6 +16,7 @@ object VenusConfig {
         private set
 
     fun load(plugin: JavaPlugin) {
+        plugin.reloadConfig()
         plugin.saveDefaultConfig()
         val config = plugin.config
 

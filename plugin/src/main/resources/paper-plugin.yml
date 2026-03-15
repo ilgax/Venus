@@ -11,3 +11,6 @@ permissions:
   venus.admin:
     description: Allows use of Venus admin commands
     default: op
+  venus.reload:
+    description: Allows use of /venus reload
+    default: op
