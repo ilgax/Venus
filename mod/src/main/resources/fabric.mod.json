@@ -21,7 +21,7 @@
       }
     ]
   },
-  "mixins": [],
+  "mixins": ["venus.mixin.json"],
   "depends": {
     "fabricloader": ">=0.16.9",
     "fabric-api": "*",

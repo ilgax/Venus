@@ -6,3 +6,4 @@ allprojects {
     group = "dev.xcyn.venus"
     version = "0.2.0-SNAPSHOT"
 }
+

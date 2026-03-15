@@ -26,8 +26,24 @@ kotlin {
     jvmToolchain(25)
 }
 
+sourceSets {
+    main {
+        java {
+            srcDir("src/main/java")
+        }
+    }
+}
+
 tasks.jar {
     archiveBaseName = "venus-mod"
+}
+
+tasks.remapJar {
+    archiveBaseName = "venus-mod"
+}
+
+tasks.withType<JavaCompile> {
+    options.compilerArgs.add("-Xlint:-unchecked")
 }
 
 loom {
