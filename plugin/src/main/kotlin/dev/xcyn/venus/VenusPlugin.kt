@@ -37,7 +37,6 @@ class VenusPlugin : JavaPlugin(), PluginMessageListener {
             }
             "venus:key" -> {
                 val clientPublicKeyBase64 = message.toString(Charsets.UTF_8)
-                logger.info("Client key received from ${player.name}")
                 handleClientKey(player, clientPublicKeyBase64)
             }
         }

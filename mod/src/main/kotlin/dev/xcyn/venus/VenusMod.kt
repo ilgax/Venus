@@ -28,6 +28,23 @@ class VenusMod : ClientModInitializer {
         override fun type(): CustomPacketPayload.Type<HelloPayload> = TYPE
     }
 
+    data class ClientKeyPayload(val keyBase64: String) : CustomPacketPayload {
+        companion object {
+            val TYPE = CustomPacketPayload.Type<ClientKeyPayload>(
+                Identifier.fromNamespaceAndPath("venus", "key")
+            )
+            val CODEC: StreamCodec<FriendlyByteBuf, ClientKeyPayload> = StreamCodec.of(
+                { buf, payload -> buf.writeBytes(payload.keyBase64.toByteArray(Charsets.UTF_8)) },
+                { buf ->
+                    val bytes = ByteArray(buf.readableBytes())
+                    buf.readBytes(bytes)
+                    ClientKeyPayload(bytes.toString(Charsets.UTF_8))
+                }
+            )
+        }
+        override fun type() = TYPE
+    }
+
     override fun onInitializeClient() {
         println("Venus mod loaded!")
 
@@ -38,10 +55,12 @@ class VenusMod : ClientModInitializer {
 
         PayloadTypeRegistry.playC2S().register(HelloPayload.TYPE, HelloPayload.CODEC)
         PayloadTypeRegistry.playS2C().register(VenusRawPayload.TYPE, VenusRawPayload.CODEC)
+        PayloadTypeRegistry.playC2S().register(ClientKeyPayload.TYPE, ClientKeyPayload.CODEC)
 
         ClientPlayNetworking.registerGlobalReceiver(VenusRawPayload.TYPE) { payload, _ ->
             val serverKeyBase64 = payload.bytes().toString(Charsets.UTF_8)
             println("Received server public key: $serverKeyBase64")
+            ClientPlayNetworking.send(ClientKeyPayload(keyManager.publicKeyBase64))
         }
 
         ClientPlayConnectionEvents.JOIN.register { _, _, _ ->
