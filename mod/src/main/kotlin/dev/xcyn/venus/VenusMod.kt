@@ -2,6 +2,7 @@ package dev.xcyn.venus
 
 import dev.xcyn.venus.auth.Handshake
 import dev.xcyn.venus.auth.KeyManager
+import dev.xcyn.venus.auth.ServerKeyStore
 import dev.xcyn.venus.network.VenusRawAuthPayload
 import dev.xcyn.venus.network.VenusRawPayload
 import dev.xcyn.venus.network.VenusRawReadyPayload
@@ -73,6 +74,7 @@ class VenusMod : ClientModInitializer {
         keyManager = KeyManager(venusFolder)
         keyManager.loadOrGenerate()
         println("Venus client keypair loaded")
+        ServerKeyStore.init(venusFolder)
 
         PayloadTypeRegistry.playC2S().register(HelloPayload.TYPE, HelloPayload.CODEC)
         PayloadTypeRegistry.playC2S().register(ClientKeyPayload.TYPE, ClientKeyPayload.CODEC)
@@ -84,7 +86,24 @@ class VenusMod : ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(VenusRawPayload.TYPE) { payload, _ ->
             val serverKeyBase64 = payload.bytes().toString(Charsets.UTF_8)
             println("Received server public key: $serverKeyBase64")
-            // TODO: TOFU — store and verify server key
+
+            val (host, port) = getServerAddress() ?: run {
+                println("Venus: could not determine server address — aborting")
+                return@registerGlobalReceiver
+            }
+
+            val storedKey = ServerKeyStore.getStoredKey(host, port)
+
+            if (storedKey == null) {
+                println("Venus: first connection to $host:$port — trusting and storing key")
+                ServerKeyStore.storeKey(host, port, serverKeyBase64)
+            } else if (storedKey != serverKeyBase64) {
+                println("Venus: WARNING — server key mismatch for $host:$port! Possible MITM. Aborting.")
+                return@registerGlobalReceiver
+            } else {
+                println("Venus: server key verified for $host:$port")
+            }
+
             ClientPlayNetworking.send(ClientKeyPayload(keyManager.publicKeyBase64))
         }
 
@@ -97,10 +116,26 @@ class VenusMod : ClientModInitializer {
             }
 
             val challengeB64 = parts[0]
-            //val serverSigB64 = parts[1]
+            val serverSigB64 = parts[1]
             val challenge = Base64.getDecoder().decode(challengeB64)
+            val serverSig = Base64.getDecoder().decode(serverSigB64)
 
-            // TODO: verify server signature with stored server public key
+            val (host, port) = getServerAddress() ?: run {
+                println("Venus: could not determine server address — aborting")
+                return@registerGlobalReceiver
+            }
+
+            val storedKeyB64 = ServerKeyStore.getStoredKey(host, port)
+            if (storedKeyB64 == null) {
+                println("Venus: no stored server key — aborting")
+                return@registerGlobalReceiver
+            }
+
+            val serverPublicKey = Handshake.decodePublicKey(storedKeyB64)
+            if (!Handshake.verify(challenge, serverSig, serverPublicKey)) {
+                println("Venus: server signature verification failed — possible MITM!")
+                return@registerGlobalReceiver
+            }
 
             val clientSig = Handshake.sign(challenge, keyManager.privateKey)
             val response = "$challengeB64.${Base64.getEncoder().encodeToString(clientSig)}"
@@ -116,5 +151,13 @@ class VenusMod : ClientModInitializer {
         ClientPlayConnectionEvents.JOIN.register { _, _, _ ->
             ClientPlayNetworking.send(HelloPayload)
         }
+    }
+
+    private fun getServerAddress(): Pair<String, Int>? {
+        val serverInfo = Minecraft.getInstance().currentServer ?: return null
+        val parts = serverInfo.ip.split(":")
+        val host = parts[0]
+        val port = if (parts.size > 1) parts[1].toIntOrNull() ?: 25565 else 25565
+        return Pair(host, port)
     }
 }

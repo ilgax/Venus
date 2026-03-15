@@ -22,4 +22,10 @@ object Handshake {
             false
         }
     }
+
+    fun decodePublicKey(base64: String): PublicKey {
+        val keyBytes = java.util.Base64.getDecoder().decode(base64)
+        val keyFactory = java.security.KeyFactory.getInstance("Ed25519")
+        return keyFactory.generatePublic(java.security.spec.X509EncodedKeySpec(keyBytes))
+    }
 }
