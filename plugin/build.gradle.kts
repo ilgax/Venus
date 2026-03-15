@@ -31,3 +31,13 @@ tasks.jar {
     from(configurations.runtimeClasspath.get().map { if (it.isDirectory) it else zipTree(it) })
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
+
+tasks.register<Copy>("deploy") {
+    from(layout.buildDirectory.file("libs/venus-plugin-${project.version}.jar"))
+    into("C:\\Users\\ilgax\\OneDrive\\Masaüstü\\VenusTestServer\\plugins")
+    dependsOn(tasks.build)
+}
+
+tasks.build {
+    finalizedBy("deploy")
+}

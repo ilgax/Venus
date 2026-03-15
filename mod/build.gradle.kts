@@ -40,10 +40,17 @@ tasks.jar {
 
 tasks.remapJar {
     archiveBaseName = "venus-mod"
+    finalizedBy("deploy")
 }
 
 tasks.withType<JavaCompile> {
     options.compilerArgs.add("-Xlint:-unchecked")
+}
+
+tasks.register<Copy>("deploy") {
+    from(layout.buildDirectory.file("libs/venus-mod-${project.version}.jar"))
+    into("C:\\Users\\ilgax\\AppData\\Roaming\\ModrinthApp\\profiles\\Venus\\mods")
+    dependsOn(tasks.remapJar)
 }
 
 loom {
