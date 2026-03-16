@@ -7,6 +7,7 @@ import dev.xcyn.venus.network.VenusRawAuthPayload
 import dev.xcyn.venus.network.VenusRawPayload
 import dev.xcyn.venus.network.VenusRawReadyPayload
 import net.fabricmc.api.ClientModInitializer
+import net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry
@@ -22,6 +23,7 @@ class VenusMod : ClientModInitializer {
 
     companion object {
         lateinit var keyManager: KeyManager
+        var sessionActive = false
     }
 
     data object HelloPayload : CustomPacketPayload {
@@ -84,6 +86,23 @@ class VenusMod : ClientModInitializer {
         override fun type() = TYPE
     }
 
+    data class CmdPayload(val command: String) : CustomPacketPayload {
+        companion object {
+            val TYPE = CustomPacketPayload.Type<CmdPayload>(
+                Identifier.fromNamespaceAndPath("venus", "cmd")
+            )
+            val CODEC: StreamCodec<FriendlyByteBuf, CmdPayload> = StreamCodec.of(
+                { buf, payload -> buf.writeBytes(payload.command.toByteArray(Charsets.UTF_8)) },
+                { buf ->
+                    val bytes = ByteArray(buf.readableBytes())
+                    buf.readBytes(bytes)
+                    CmdPayload(bytes.toString(Charsets.UTF_8))
+                }
+            )
+        }
+        override fun type() = TYPE
+    }
+
     override fun onInitializeClient() {
         println("Venus mod loaded!")
 
@@ -100,6 +119,7 @@ class VenusMod : ClientModInitializer {
         PayloadTypeRegistry.playS2C().register(VenusRawPayload.TYPE, VenusRawPayload.CODEC)
         PayloadTypeRegistry.playS2C().register(VenusRawAuthPayload.TYPE, VenusRawAuthPayload.CODEC)
         PayloadTypeRegistry.playS2C().register(VenusRawReadyPayload.TYPE, VenusRawReadyPayload.CODEC)
+        PayloadTypeRegistry.playC2S().register(CmdPayload.TYPE, CmdPayload.CODEC)
 
         ClientPlayNetworking.registerGlobalReceiver(VenusRawPayload.TYPE) { payload, _ ->
             val serverKeyBase64 = payload.bytes().toString(Charsets.UTF_8)
@@ -165,11 +185,26 @@ class VenusMod : ClientModInitializer {
 
         ClientPlayNetworking.registerGlobalReceiver(VenusRawReadyPayload.TYPE) { _, _ ->
             println("Venus: session active!")
-            // TODO: open panel UI
+            sessionActive = true
+            // TODO: Open gui
         }
 
         ClientPlayConnectionEvents.JOIN.register { _, _, _ ->
             ClientPlayNetworking.send(HelloPayload)
+        }
+
+        ClientSendMessageEvents.ALLOW_CHAT.register { message ->
+            if (sessionActive && message.startsWith("$")) {
+                val command = message.removePrefix("$").trim()
+                ClientPlayNetworking.send(CmdPayload(command))
+                false
+            } else {
+                true
+            }
+        }
+
+        ClientPlayConnectionEvents.DISCONNECT.register { _, _ ->
+            sessionActive = false
         }
     }
 
