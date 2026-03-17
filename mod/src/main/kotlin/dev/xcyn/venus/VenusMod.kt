@@ -4,6 +4,7 @@ import dev.xcyn.venus.auth.Handshake
 import dev.xcyn.venus.auth.KeyManager
 import dev.xcyn.venus.auth.ServerKeyStore
 import dev.xcyn.venus.network.VenusRawAuthPayload
+import dev.xcyn.venus.network.VenusRawDataPayload
 import dev.xcyn.venus.network.VenusRawPayload
 import dev.xcyn.venus.network.VenusRawReadyPayload
 import net.fabricmc.api.ClientModInitializer
@@ -120,23 +121,24 @@ class VenusMod : ClientModInitializer {
         PayloadTypeRegistry.playS2C().register(VenusRawAuthPayload.TYPE, VenusRawAuthPayload.CODEC)
         PayloadTypeRegistry.playS2C().register(VenusRawReadyPayload.TYPE, VenusRawReadyPayload.CODEC)
         PayloadTypeRegistry.playC2S().register(CmdPayload.TYPE, CmdPayload.CODEC)
+        PayloadTypeRegistry.playS2C().register(VenusRawDataPayload.TYPE, VenusRawDataPayload.CODEC)
 
         ClientPlayNetworking.registerGlobalReceiver(VenusRawPayload.TYPE) { payload, _ ->
             val serverKeyBase64 = payload.bytes().toString(Charsets.UTF_8)
             println("Received server public key: $serverKeyBase64")
 
             val (host, port) = getServerAddress() ?: run {
-                println("Venus: could not determine server address — aborting")
+                println("Venus: could not determine server address - aborting")
                 return@registerGlobalReceiver
             }
 
             val storedKey = ServerKeyStore.getStoredKey(host, port)
 
             if (storedKey == null) {
-                println("Venus: first connection to $host:$port — trusting and storing key")
+                println("Venus: first connection to $host:$port - trusting and storing key")
                 ServerKeyStore.storeKey(host, port, serverKeyBase64)
             } else if (storedKey != serverKeyBase64) {
-                println("Venus: WARNING — server key mismatch for $host:$port! Possible MITM. Aborting.")
+                println("Venus: WARNING - server key mismatch for $host:$port! Possible MITM. Aborting.")
                 ClientPlayNetworking.send(ErrorPayload("mitm_key_mismatch"))
                 return@registerGlobalReceiver
             } else {
@@ -160,19 +162,19 @@ class VenusMod : ClientModInitializer {
             val serverSig = Base64.getDecoder().decode(serverSigB64)
 
             val (host, port) = getServerAddress() ?: run {
-                println("Venus: could not determine server address — aborting")
+                println("Venus: could not determine server address - aborting")
                 return@registerGlobalReceiver
             }
 
             val storedKeyB64 = ServerKeyStore.getStoredKey(host, port)
             if (storedKeyB64 == null) {
-                println("Venus: no stored server key — aborting")
+                println("Venus: no stored server key - aborting")
                 return@registerGlobalReceiver
             }
 
             val serverPublicKey = Handshake.decodePublicKey(storedKeyB64)
             if (!Handshake.verify(challenge, serverSig, serverPublicKey)) {
-                println("Venus: WARNING — server signature verification failed! Possible MITM. Aborting.")
+                println("Venus: WARNING - server signature verification failed! Possible MITM. Aborting.")
                 ClientPlayNetworking.send(ErrorPayload("mitm_sig_fail"))
                 return@registerGlobalReceiver
             }
@@ -186,7 +188,14 @@ class VenusMod : ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(VenusRawReadyPayload.TYPE) { _, _ ->
             println("Venus: session active!")
             sessionActive = true
+            ClientPlayNetworking.send(CmdPayload("""{"type":"stat_subscribe","interval_seconds":2,"stats":["tps","ram","mspt","uptime"]}"""))
             // TODO: Open gui
+        }
+
+        ClientPlayNetworking.registerGlobalReceiver(VenusRawDataPayload.TYPE) { payload, _ ->
+            val data = payload.bytes().toString(Charsets.UTF_8)
+            println("Venus data received: $data")
+            // TODO: parse and store in SessionState for GUI
         }
 
         ClientPlayConnectionEvents.JOIN.register { _, _, _ ->

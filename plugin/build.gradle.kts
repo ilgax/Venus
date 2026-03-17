@@ -1,5 +1,6 @@
 plugins {
     kotlin("jvm")
+    kotlin("plugin.serialization") version "2.3.20"
     id("io.papermc.paperweight.userdev") version "2.0.0-beta.19"
 }
 
@@ -12,6 +13,7 @@ dependencies {
     paperweight.paperDevBundle("1.21.11-R0.1-SNAPSHOT")
     compileOnly("io.netty:netty-buffer:4.1.97.Final")
     implementation(kotlin("stdlib"))
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.10.0")
 }
 
 kotlin {

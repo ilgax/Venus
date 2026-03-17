@@ -1,6 +1,7 @@
 package dev.xcyn.venus.mixin;
 
 import dev.xcyn.venus.network.VenusRawAuthPayload;
+import dev.xcyn.venus.network.VenusRawDataPayload;
 import dev.xcyn.venus.network.VenusRawPayload;
 import dev.xcyn.venus.network.VenusRawReadyPayload;
 import net.minecraft.network.FriendlyByteBuf;
@@ -47,6 +48,10 @@ public class CustomPayloadMixin {
                 if (identifier.equals(Identifier.fromNamespaceAndPath("venus", "ready"))) {
                     //noinspection unchecked
                     return (StreamCodec<FriendlyByteBuf, ? extends CustomPacketPayload>) (StreamCodec<?, ?>) VenusRawReadyPayload.CODEC;
+                }
+                if (identifier.equals(Identifier.fromNamespaceAndPath("venus", "data"))) {
+                    //noinspection unchecked
+                    return (StreamCodec<FriendlyByteBuf, ? extends CustomPacketPayload>) (StreamCodec<?, ?>) VenusRawDataPayload.CODEC;
                 }
                 //noinspection unchecked
                 return ((CustomPacketPayload.FallbackProvider<FriendlyByteBuf>) original).create(identifier);

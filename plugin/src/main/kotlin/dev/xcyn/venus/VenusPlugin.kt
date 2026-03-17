@@ -8,6 +8,8 @@ import dev.xcyn.venus.auth.PendingSession
 import dev.xcyn.venus.auth.SessionManager
 import dev.xcyn.venus.commands.VenusCommand
 import dev.xcyn.venus.config.VenusConfig
+import dev.xcyn.venus.stats.StatSubscriptionManager
+import dev.xcyn.venus.stats.StatsCollector
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket
 import net.minecraft.network.protocol.common.custom.DiscardedPayload
 import net.minecraft.resources.Identifier
@@ -49,6 +51,7 @@ class VenusPlugin : JavaPlugin(), PluginMessageListener, Listener {
         server.messenger.unregisterIncomingPluginChannel(this, "venus:auth")
         server.messenger.unregisterIncomingPluginChannel(this, "venus:error")
         server.messenger.unregisterIncomingPluginChannel(this, "venus:cmd")
+        StatSubscriptionManager.cancelAll()
     }
 
     override fun onPluginMessageReceived(channel: String, player: Player, message: ByteArray) {
@@ -67,14 +70,14 @@ class VenusPlugin : JavaPlugin(), PluginMessageListener, Listener {
             }
             "venus:error" -> {
                 when (val reason = message.toString(Charsets.UTF_8)) {
-                    "mitm_key_mismatch" -> logger.warning("${player.name} rejected connection — server key mismatch on client side (possible MITM)")
-                    "mitm_sig_fail" -> logger.warning("${player.name} rejected connection — server signature verification failed on client side (possible MITM)")
+                    "mitm_key_mismatch" -> logger.warning("${player.name} rejected connection - server key mismatch on client side (possible MITM)")
+                    "mitm_sig_fail" -> logger.warning("${player.name} rejected connection - server signature verification failed on client side (possible MITM)")
                     else -> logger.warning("${player.name} sent error: $reason")
                 }
             }
             "venus:cmd" -> {
-                val command = message.toString(Charsets.UTF_8)
-                handleConsoleCommand(player, command)
+                val data = message.toString(Charsets.UTF_8)
+                handleCmdPacket(player, data)
             }
         }
     }
@@ -84,11 +87,12 @@ class VenusPlugin : JavaPlugin(), PluginMessageListener, Listener {
         val uuid = event.player.uniqueId
         if (!SessionManager.isActive(uuid)) return
 
-        logger.info("${event.player.name} disconnected — starting ${VenusConfig.sessionTimeoutSeconds}s Venus session timeout")
+        logger.info("${event.player.name} disconnected - starting ${VenusConfig.sessionTimeoutSeconds}s Venus session timeout")
 
         server.scheduler.runTaskLater(this, Runnable {
             if (!SessionManager.isActive(uuid)) return@Runnable
             SessionManager.deactivate(uuid)
+            StatSubscriptionManager.cancel(uuid)
             logger.info("Venus session expired for ${event.player.name}")
         }, (VenusConfig.sessionTimeoutSeconds * 20L))
     }
@@ -119,10 +123,10 @@ class VenusPlugin : JavaPlugin(), PluginMessageListener, Listener {
             val cachedKey = SessionManager.getCachedKey(player.uniqueId)
             if (cachedKey != null) {
                 if (cachedKey != clientPublicKeyBase64) {
-                    logger.warning("UUID cache mismatch for ${player.name} — key changed, falling through to full auth")
+                    logger.warning("UUID cache mismatch for ${player.name} - key changed, falling through to full auth")
                     SessionManager.clearUUIDCache(player.uniqueId)
                 } else {
-                    logger.info("UUID cache hit for ${player.name} — skipping authorized_keys check")
+                    logger.info("UUID cache hit for ${player.name} - skipping authorized_keys check")
                     val challenge = Handshake.generateChallenge()
                     val serverSig = Handshake.sign(challenge, keyManager.privateKey)
                     SessionManager.addPending(player.uniqueId, PendingSession(clientPublicKey, challenge))
@@ -137,10 +141,10 @@ class VenusPlugin : JavaPlugin(), PluginMessageListener, Listener {
             val serverSig = Handshake.sign(challenge, keyManager.privateKey)
             SessionManager.addPending(player.uniqueId, PendingSession(clientPublicKey, challenge))
             sendAuthChallenge(player, challenge, serverSig)
-            logger.info("Authorized key recognized for ${player.name} — sending challenge")
+            logger.info("Authorized key recognized for ${player.name} - sending challenge")
         } else {
             if (AuthorizedKeys.count() >= VenusConfig.maxUsers) {
-                logger.warning("${player.name} tried to connect to Venus but max_users (${VenusConfig.maxUsers}) reached — rejecting.")
+                logger.warning("${player.name} tried to connect to Venus but max_users (${VenusConfig.maxUsers}) reached - rejecting.")
                 return
             }
 
@@ -194,7 +198,7 @@ class VenusPlugin : JavaPlugin(), PluginMessageListener, Listener {
         }
 
         if (!Handshake.verify(challenge, clientSig, pending.clientPublicKey)) {
-            logger.warning("Invalid signature from ${player.name} — rejecting")
+            logger.warning("Invalid signature from ${player.name} - rejecting")
             SessionManager.removePending(player.uniqueId)
             return
         }
@@ -210,13 +214,43 @@ class VenusPlugin : JavaPlugin(), PluginMessageListener, Listener {
         logger.info("${player.name} authenticated successfully!")
         sendReady(player)
     }
-    private fun handleConsoleCommand(player: Player, command: String) {
+
+    private fun handleCmdPacket(player: Player, data: String) {
         if (!SessionManager.isActive(player.uniqueId)) {
-            logger.warning("${player.name} tried to run console command without active session — ignoring")
+            logger.warning("${player.name} sent cmd packet without active session - ignoring")
             return
         }
-        logger.info("${player.name} executed console command: $command")
-        server.dispatchCommand(server.consoleSender, command)
+
+        when {
+            data.startsWith("{\"type\":\"console_cmd\"") -> {
+                val command = data.substringAfter("\"command\":\"").substringBefore("\"}")
+                logger.info("${player.name} executed console command: $command")
+                server.dispatchCommand(server.consoleSender, command)
+            }
+            data.startsWith("{\"type\":\"stat_subscribe\"") -> {
+                val intervalSeconds = data.substringAfter("\"interval_seconds\":").substringBefore(",").trim().toIntOrNull() ?: 2
+                val statsRaw = data.substringAfter("\"stats\":[").substringBefore("]")
+                val stats = statsRaw.split(",").map { it.trim().removeSurrounding("\"") }
+                logger.info("${player.name} subscribed to stats: $stats every ${intervalSeconds}s")
+                StatSubscriptionManager.subscribe(player.uniqueId, stats, intervalSeconds, this) { json ->
+                    sendDataToPlayer(player, json)
+                }
+            }
+            data.startsWith("{\"type\":\"stat_get\"") -> {
+                val statsRaw = data.substringAfter("\"stats\":[").substringBefore("]")
+                val stats = statsRaw.split(",").map { it.trim().removeSurrounding("\"") }
+                val json = StatsCollector.buildStatsJson(server, stats)
+                sendDataToPlayer(player, json)
+                logger.info("${player.name} requested one-time stats: $stats")
+            }
+            else -> logger.warning("${player.name} sent unknown cmd packet: $data")
+        }
+    }
+
+    private fun sendDataToPlayer(player: Player, data: String) {
+        val id = Identifier.fromNamespaceAndPath("venus", "data")
+        val packet = ClientboundCustomPayloadPacket(DiscardedPayload(id, data.toByteArray(Charsets.UTF_8)))
+        (player as CraftPlayer).handle.connection.send(packet)
     }
 
     fun sendReady(player: Player) {
