@@ -8,8 +8,14 @@ import dev.xcyn.venus.auth.PendingSession
 import dev.xcyn.venus.auth.SessionManager
 import dev.xcyn.venus.commands.VenusCommand
 import dev.xcyn.venus.config.VenusConfig
+import dev.xcyn.venus.stats.ConsoleCmdPacket
+import dev.xcyn.venus.stats.StatGetPacket
+import dev.xcyn.venus.stats.StatSubscribePacket
 import dev.xcyn.venus.stats.StatSubscriptionManager
 import dev.xcyn.venus.stats.StatsCollector
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket
 import net.minecraft.network.protocol.common.custom.DiscardedPayload
 import net.minecraft.resources.Identifier
@@ -23,6 +29,8 @@ import org.bukkit.plugin.messaging.PluginMessageListener
 import java.util.Base64
 
 class VenusPlugin : JavaPlugin(), PluginMessageListener, Listener {
+
+    private val json = Json { ignoreUnknownKeys = true }
 
     lateinit var keyManager: KeyManager
 
@@ -221,29 +229,33 @@ class VenusPlugin : JavaPlugin(), PluginMessageListener, Listener {
             return
         }
 
-        when {
-            data.startsWith("{\"type\":\"console_cmd\"") -> {
-                val command = data.substringAfter("\"command\":\"").substringBefore("\"}")
-                logger.info("${player.name} executed console command: $command")
-                server.dispatchCommand(server.consoleSender, command)
+        val jsonElement = json.parseToJsonElement(data)
+        val type = jsonElement.jsonObject["type"]?.jsonPrimitive?.content
+            ?: run {
+                logger.warning("${player.name} sent cmd packet without type field")
+                return
             }
-            data.startsWith("{\"type\":\"stat_subscribe\"") -> {
-                val intervalSeconds = data.substringAfter("\"interval_seconds\":").substringBefore(",").trim().toIntOrNull() ?: 2
-                val statsRaw = data.substringAfter("\"stats\":[").substringBefore("]")
-                val stats = statsRaw.split(",").map { it.trim().removeSurrounding("\"") }
-                logger.info("${player.name} subscribed to stats: $stats every ${intervalSeconds}s")
-                StatSubscriptionManager.subscribe(player.uniqueId, stats, intervalSeconds, this) { json ->
-                    sendDataToPlayer(player, json)
+
+        when (type) {
+            "console_cmd" -> {
+                val packet = json.decodeFromString<ConsoleCmdPacket>(data)
+                logger.info("${player.name} executed console command: ${packet.command}")
+                server.dispatchCommand(server.consoleSender, packet.command)
+            }
+            "stat_subscribe" -> {
+                val packet = json.decodeFromString<StatSubscribePacket>(data)
+                logger.info("${player.name} subscribed to stats: ${packet.stats} every ${packet.intervalSeconds}s")
+                StatSubscriptionManager.subscribe(player.uniqueId, packet.stats, packet.intervalSeconds, this) { statsJson ->
+                    sendDataToPlayer(player, statsJson)
                 }
             }
-            data.startsWith("{\"type\":\"stat_get\"") -> {
-                val statsRaw = data.substringAfter("\"stats\":[").substringBefore("]")
-                val stats = statsRaw.split(",").map { it.trim().removeSurrounding("\"") }
-                val json = StatsCollector.buildStatsJson(server, stats)
-                sendDataToPlayer(player, json)
-                logger.info("${player.name} requested one-time stats: $stats")
+            "stat_get" -> {
+                val packet = json.decodeFromString<StatGetPacket>(data)
+                val statsJson = StatsCollector.buildStatsJson(server, packet.stats)
+                sendDataToPlayer(player, statsJson)
+                logger.info("${player.name} requested one-time stats: ${packet.stats}")
             }
-            else -> logger.warning("${player.name} sent unknown cmd packet: $data")
+            else -> logger.warning("${player.name} sent unknown cmd packet type: $type")
         }
     }
 
