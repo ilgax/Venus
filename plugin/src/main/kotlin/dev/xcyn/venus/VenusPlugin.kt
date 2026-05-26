@@ -64,6 +64,12 @@ class VenusPlugin :
         server.messenger.unregisterIncomingPluginChannel(this, "venus:auth")
         server.messenger.unregisterIncomingPluginChannel(this, "venus:error")
         server.messenger.unregisterIncomingPluginChannel(this, "venus:cmd")
+
+        server.messenger.unregisterOutgoingPluginChannel(this, "venus:key")
+        server.messenger.unregisterOutgoingPluginChannel(this, "venus:auth")
+        server.messenger.unregisterOutgoingPluginChannel(this, "venus:data")
+        server.messenger.unregisterOutgoingPluginChannel(this, "venus:ready")
+
         StatSubscriptionManager.cancelAll()
     }
 
@@ -135,11 +141,7 @@ class VenusPlugin :
     }
 
     private fun sendServerPublicKey(player: Player) {
-        val keyBytes = keyManager.publicKeyBase64.toByteArray(Charsets.UTF_8)
-        val id = Identifier.fromNamespaceAndPath("venus", "key")
-        val payload = DiscardedPayload(id, keyBytes)
-        val packet = ClientboundCustomPayloadPacket(payload)
-        (player as CraftPlayer).handle.connection.send(packet)
+        player.sendPluginMessage(this, "venus:key", keyManager.publicKeyBase64.toByteArray(Charsets.UTF_8))
         logger.info("Sent server public key to ${player.name}")
     }
 
@@ -215,10 +217,7 @@ class VenusPlugin :
     ) {
         val challengeB64 = Base64.getEncoder().encodeToString(challenge)
         val sigB64 = Base64.getEncoder().encodeToString(serverSig)
-        val payload = "$challengeB64.$sigB64".toByteArray(Charsets.UTF_8)
-        val id = Identifier.fromNamespaceAndPath("venus", "auth")
-        val packet = ClientboundCustomPayloadPacket(DiscardedPayload(id, payload))
-        (player as CraftPlayer).handle.connection.send(packet)
+        player.sendPluginMessage(this, "venus:auth", "$challengeB64.$sigB64".toByteArray(Charsets.UTF_8))
     }
 
     private fun handleAuthResponse(
@@ -331,15 +330,11 @@ class VenusPlugin :
         player: Player,
         data: String,
     ) {
-        val id = Identifier.fromNamespaceAndPath("venus", "data")
-        val packet = ClientboundCustomPayloadPacket(DiscardedPayload(id, data.toByteArray(Charsets.UTF_8)))
-        (player as CraftPlayer).handle.connection.send(packet)
+        player.sendPluginMessage(this, "venus:data", data.toByteArray(Charsets.UTF_8))
     }
 
     fun sendReady(player: Player) {
-        val id = Identifier.fromNamespaceAndPath("venus", "ready")
-        val packet = ClientboundCustomPayloadPacket(DiscardedPayload(id, ByteArray(0)))
-        (player as CraftPlayer).handle.connection.send(packet)
+        player.sendPluginMessage(this, "venus:ready", ByteArray(0))
         logger.info("Sent venus:ready to ${player.name}")
     }
 
