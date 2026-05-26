@@ -1,0 +1,17 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-yaml
+      - id: check-added-large-files
+      - id: detect-private-key
+
+  - repo: local
+    hooks:
+      - id: ktlint
+        name: ktlint
+        description: Format Kotlin files with ktlint
+        entry: ktlint --format
+        language: system
+        types: [kotlin]
+        require_serial: true

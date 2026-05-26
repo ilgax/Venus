@@ -1,0 +1,8 @@
+root = true
+
+[*.kt]
+ktlint_standard_no-wildcard-imports = enabled
+ktlint_standard_no-empty-file = disabled
+
+[*.{yml,yaml}]
+indent_size = 2
