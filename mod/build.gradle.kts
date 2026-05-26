@@ -43,6 +43,7 @@ tasks.jar {
 
 tasks.remapJar {
     archiveBaseName = "venus-mod"
+    from(zipTree(project(":common").tasks.jar.get().archiveFile))
     finalizedBy("deploy")
 }
 
