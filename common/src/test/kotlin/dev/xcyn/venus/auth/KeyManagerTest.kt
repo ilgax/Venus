@@ -24,11 +24,20 @@ class KeyManagerTest {
     }
 
     @Test
-    fun `loadOrGenerate creates key files on fresh directory`() {
+    fun `loadOrGenerate creates key files with default server prefix`() {
         val km = KeyManager(tempDir)
         km.loadOrGenerate()
         val keysDir = tempDir.resolve("keys")
         assertTrue(keysDir.isDirectory)
+        assertTrue(keysDir.resolve("server_private.key").exists())
+        assertTrue(keysDir.resolve("server_public.key").exists())
+    }
+
+    @Test
+    fun `loadOrGenerate creates key files with custom client prefix`() {
+        val km = KeyManager(tempDir, "client_private.key", "client_public.key")
+        km.loadOrGenerate()
+        val keysDir = tempDir.resolve("keys")
         assertTrue(keysDir.resolve("client_private.key").exists())
         assertTrue(keysDir.resolve("client_public.key").exists())
     }
@@ -68,14 +77,5 @@ class KeyManagerTest {
         km.loadOrGenerate()
         val decoded = Handshake.decodePublicKey(km.publicKeyBase64)
         assertEquals(km.publicKey, decoded)
-    }
-
-    @Test
-    fun `key files use client prefix`() {
-        val km = KeyManager(tempDir)
-        km.loadOrGenerate()
-        val keysDir = tempDir.resolve("keys")
-        assertTrue(keysDir.resolve("client_private.key").exists())
-        assertTrue(keysDir.resolve("client_public.key").exists())
     }
 }

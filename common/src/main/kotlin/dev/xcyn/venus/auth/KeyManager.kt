@@ -9,11 +9,13 @@ import java.security.spec.X509EncodedKeySpec
 import java.util.Base64
 
 class KeyManager(
-    private val dataFolder: java.io.File,
+    dataFolder: java.io.File,
+    privateKeyName: String = "server_private.key",
+    publicKeyName: String = "server_public.key",
 ) {
     private val keysFolder = dataFolder.resolve("keys")
-    private val privateKeyFile = keysFolder.resolve("client_private.key")
-    private val publicKeyFile = keysFolder.resolve("client_public.key")
+    private val privateKeyFile = keysFolder.resolve(privateKeyName)
+    private val publicKeyFile = keysFolder.resolve(publicKeyName)
 
     lateinit var privateKey: PrivateKey
     lateinit var publicKey: PublicKey

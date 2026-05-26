@@ -8,10 +8,10 @@ import dev.xcyn.venus.auth.PendingSession
 import dev.xcyn.venus.auth.SessionManager
 import dev.xcyn.venus.commands.VenusCommand
 import dev.xcyn.venus.config.VenusConfig
-import dev.xcyn.venus.stats.CmdResponsePacket
-import dev.xcyn.venus.stats.ConsoleCmdPacket
-import dev.xcyn.venus.stats.StatGetPacket
-import dev.xcyn.venus.stats.StatSubscribePacket
+import dev.xcyn.venus.protocol.CmdResponsePacket
+import dev.xcyn.venus.protocol.ConsoleCmdPacket
+import dev.xcyn.venus.protocol.StatGetPacket
+import dev.xcyn.venus.protocol.StatSubscribePacket
 import dev.xcyn.venus.stats.StatSubscriptionManager
 import dev.xcyn.venus.stats.StatsCollector
 import kotlinx.serialization.json.Json

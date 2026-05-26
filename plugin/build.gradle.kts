@@ -12,6 +12,7 @@ repositories {
 dependencies {
     paperweight.paperDevBundle("1.21.11-R0.1-SNAPSHOT")
     compileOnly("io.netty:netty-buffer:4.1.97.Final")
+    implementation(project(":common"))
     implementation(kotlin("stdlib"))
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.10.0")
     testImplementation(kotlin("test"))

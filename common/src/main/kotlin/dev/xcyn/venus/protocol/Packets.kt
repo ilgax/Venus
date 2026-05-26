@@ -1,4 +1,4 @@
-package dev.xcyn.venus.stats
+package dev.xcyn.venus.protocol
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable

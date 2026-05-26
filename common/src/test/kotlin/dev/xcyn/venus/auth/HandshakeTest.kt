@@ -1,6 +1,7 @@
 package dev.xcyn.venus.auth
 
 import java.security.KeyPairGenerator
+import java.security.spec.InvalidKeySpecException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -55,7 +56,6 @@ class HandshakeTest {
 
     @Test
     fun `verify returns false on any exception`() {
-        // data and sig size mismatch should be caught by try/catch
         val data = "hello".toByteArray()
         val shortSig = ByteArray(10)
         assertFalse(Handshake.verify(data, shortSig, keyPair.public))
@@ -80,7 +80,7 @@ class HandshakeTest {
 
     @Test
     fun `decodePublicKey fails on empty string`() {
-        assertFailsWith<java.security.spec.InvalidKeySpecException> {
+        assertFailsWith<InvalidKeySpecException> {
             Handshake.decodePublicKey("")
         }
     }

@@ -1,10 +1,10 @@
-package dev.xcyn.venus.stats
+package dev.xcyn.venus.protocol
 
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-class CmdPacketsTest {
+class PacketsTest {
     private val json = Json { ignoreUnknownKeys = true }
 
     @Test
