@@ -1,4 +1,4 @@
-name: Mod CI
+name: Mod
 
 on:
   push:
@@ -10,8 +10,6 @@ on:
       - 'settings.gradle.kts'
       - 'gradle.properties'
       - '.github/workflows/mod.yml'
-  pull_request:
-    branches: [master]
   workflow_dispatch: {}
 
 jobs:
