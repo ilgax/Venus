@@ -1,11 +1,16 @@
 package dev.xcyn.venus.auth
 
-import java.security.*
+import java.security.KeyFactory
+import java.security.KeyPairGenerator
+import java.security.PrivateKey
+import java.security.PublicKey
 import java.security.spec.PKCS8EncodedKeySpec
 import java.security.spec.X509EncodedKeySpec
 import java.util.Base64
 
-class KeyManager(private val dataFolder: java.io.File) {
+class KeyManager(
+    private val dataFolder: java.io.File,
+) {
     private val keysFolder = dataFolder.resolve("keys")
     private val privateKeyFile = keysFolder.resolve("client_private.key")
     private val publicKeyFile = keysFolder.resolve("client_public.key")
@@ -21,12 +26,14 @@ class KeyManager(private val dataFolder: java.io.File) {
             generate()
         }
     }
+
     private fun load() {
         val keyFactory = KeyFactory.getInstance("Ed25519")
         privateKey = keyFactory.generatePrivate(PKCS8EncodedKeySpec(privateKeyFile.readBytes()))
         publicKey = keyFactory.generatePublic(X509EncodedKeySpec(publicKeyFile.readBytes()))
         publicKeyBase64 = Base64.getEncoder().encodeToString(publicKey.encoded)
     }
+
     private fun generate() {
         val keyPairGenerator = KeyPairGenerator.getInstance("Ed25519")
         val keyPair = keyPairGenerator.generateKeyPair()

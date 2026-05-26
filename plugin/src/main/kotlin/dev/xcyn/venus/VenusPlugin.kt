@@ -28,8 +28,10 @@ import org.bukkit.plugin.java.JavaPlugin
 import org.bukkit.plugin.messaging.PluginMessageListener
 import java.util.Base64
 
-class VenusPlugin : JavaPlugin(), PluginMessageListener, Listener {
-
+class VenusPlugin :
+    JavaPlugin(),
+    PluginMessageListener,
+    Listener {
     private val json = Json { ignoreUnknownKeys = true }
 
     lateinit var keyManager: KeyManager
@@ -62,27 +64,47 @@ class VenusPlugin : JavaPlugin(), PluginMessageListener, Listener {
         StatSubscriptionManager.cancelAll()
     }
 
-    override fun onPluginMessageReceived(channel: String, player: Player, message: ByteArray) {
+    override fun onPluginMessageReceived(
+        channel: String,
+        player: Player,
+        message: ByteArray,
+    ) {
         when (channel) {
             "venus:hello" -> {
                 logger.info("Venus mod detected: ${player.name}")
                 sendServerPublicKey(player)
             }
+
             "venus:key" -> {
                 val clientPublicKeyBase64 = message.toString(Charsets.UTF_8)
                 handleClientKey(player, clientPublicKeyBase64)
             }
+
             "venus:auth" -> {
                 val response = message.toString(Charsets.UTF_8)
                 handleAuthResponse(player, response)
             }
+
             "venus:error" -> {
                 when (val reason = message.toString(Charsets.UTF_8)) {
-                    "mitm_key_mismatch" -> logger.warning("${player.name} rejected connection - server key mismatch on client side (possible MITM)")
-                    "mitm_sig_fail" -> logger.warning("${player.name} rejected connection - server signature verification failed on client side (possible MITM)")
-                    else -> logger.warning("${player.name} sent error: $reason")
+                    "mitm_key_mismatch" -> {
+                        logger.warning(
+                            "${player.name} rejected connection - server key mismatch on client side (possible MITM)",
+                        )
+                    }
+
+                    "mitm_sig_fail" -> {
+                        logger.warning(
+                            "${player.name} rejected connection - server signature verification failed on client side (possible MITM)",
+                        )
+                    }
+
+                    else -> {
+                        logger.warning("${player.name} sent error: $reason")
+                    }
                 }
             }
+
             "venus:cmd" -> {
                 val data = message.toString(Charsets.UTF_8)
                 handleCmdPacket(player, data)
@@ -97,12 +119,16 @@ class VenusPlugin : JavaPlugin(), PluginMessageListener, Listener {
 
         logger.info("${event.player.name} disconnected - starting ${VenusConfig.sessionTimeoutSeconds}s Venus session timeout")
 
-        server.scheduler.runTaskLater(this, Runnable {
-            if (!SessionManager.isActive(uuid)) return@Runnable
-            SessionManager.deactivate(uuid)
-            StatSubscriptionManager.cancel(uuid)
-            logger.info("Venus session expired for ${event.player.name}")
-        }, (VenusConfig.sessionTimeoutSeconds * 20L))
+        server.scheduler.runTaskLater(
+            this,
+            Runnable {
+                if (!SessionManager.isActive(uuid)) return@Runnable
+                SessionManager.deactivate(uuid)
+                StatSubscriptionManager.cancel(uuid)
+                logger.info("Venus session expired for ${event.player.name}")
+            },
+            (VenusConfig.sessionTimeoutSeconds * 20L),
+        )
     }
 
     private fun sendServerPublicKey(player: Player) {
@@ -114,18 +140,22 @@ class VenusPlugin : JavaPlugin(), PluginMessageListener, Listener {
         logger.info("Sent server public key to ${player.name}")
     }
 
-    private fun handleClientKey(player: Player, clientPublicKeyBase64: String) {
+    private fun handleClientKey(
+        player: Player,
+        clientPublicKeyBase64: String,
+    ) {
         if (clientPublicKeyBase64.isBlank()) {
             logger.warning("Empty client key from ${player.name}")
             return
         }
 
-        val clientPublicKey = try {
-            Handshake.decodePublicKey(clientPublicKeyBase64)
-        } catch (e: Exception) {
-            logger.warning("Invalid client key from ${player.name}: ${e.message}")
-            return
-        }
+        val clientPublicKey =
+            try {
+                Handshake.decodePublicKey(clientPublicKeyBase64)
+            } catch (e: Exception) {
+                logger.warning("Invalid client key from ${player.name}: ${e.message}")
+                return
+            }
 
         if (server.onlineMode && VenusConfig.cacheVerifiedUuid) {
             val cachedKey = SessionManager.getCachedKey(player.uniqueId)
@@ -158,20 +188,28 @@ class VenusPlugin : JavaPlugin(), PluginMessageListener, Listener {
 
             SessionManager.addPendingApproval(
                 player.uniqueId,
-                PendingApproval(clientPublicKey, clientPublicKeyBase64)
+                PendingApproval(clientPublicKey, clientPublicKeyBase64),
             )
             logger.info("${player.name} wants to connect to Venus. Type 'venus allow' or 'venus deny'")
 
-            server.scheduler.runTaskLater(this, Runnable {
-                if (SessionManager.getPendingApproval(player.uniqueId) != null) {
-                    SessionManager.removePendingApproval(player.uniqueId)
-                    logger.info("Venus request from ${player.name} timed out.")
-                }
-            }, (VenusConfig.sessionTimeoutSeconds * 20L))
+            server.scheduler.runTaskLater(
+                this,
+                Runnable {
+                    if (SessionManager.getPendingApproval(player.uniqueId) != null) {
+                        SessionManager.removePendingApproval(player.uniqueId)
+                        logger.info("Venus request from ${player.name} timed out.")
+                    }
+                },
+                (VenusConfig.sessionTimeoutSeconds * 20L),
+            )
         }
     }
 
-    private fun sendAuthChallenge(player: Player, challenge: ByteArray, serverSig: ByteArray) {
+    private fun sendAuthChallenge(
+        player: Player,
+        challenge: ByteArray,
+        serverSig: ByteArray,
+    ) {
         val challengeB64 = Base64.getEncoder().encodeToString(challenge)
         val sigB64 = Base64.getEncoder().encodeToString(serverSig)
         val payload = "$challengeB64.$sigB64".toByteArray(Charsets.UTF_8)
@@ -180,7 +218,10 @@ class VenusPlugin : JavaPlugin(), PluginMessageListener, Listener {
         (player as CraftPlayer).handle.connection.send(packet)
     }
 
-    private fun handleAuthResponse(player: Player, response: String) {
+    private fun handleAuthResponse(
+        player: Player,
+        response: String,
+    ) {
         val parts = response.split(".")
         if (parts.size != 2) {
             logger.warning("Invalid auth response format from ${player.name}")
@@ -215,26 +256,32 @@ class VenusPlugin : JavaPlugin(), PluginMessageListener, Listener {
         SessionManager.activate(player.uniqueId, pending.clientPublicKey)
 
         if (server.onlineMode && VenusConfig.cacheVerifiedUuid) {
-            SessionManager.cacheUUID(player.uniqueId,
-                Base64.getEncoder().encodeToString(pending.clientPublicKey.encoded))
+            SessionManager.cacheUUID(
+                player.uniqueId,
+                Base64.getEncoder().encodeToString(pending.clientPublicKey.encoded),
+            )
         }
 
         logger.info("${player.name} authenticated successfully!")
         sendReady(player)
     }
 
-    private fun handleCmdPacket(player: Player, data: String) {
+    private fun handleCmdPacket(
+        player: Player,
+        data: String,
+    ) {
         if (!SessionManager.isActive(player.uniqueId)) {
             logger.warning("${player.name} sent cmd packet without active session - ignoring")
             return
         }
 
         val jsonElement = json.parseToJsonElement(data)
-        val type = jsonElement.jsonObject["type"]?.jsonPrimitive?.content
-            ?: run {
-                logger.warning("${player.name} sent cmd packet without type field")
-                return
-            }
+        val type =
+            jsonElement.jsonObject["type"]?.jsonPrimitive?.content
+                ?: run {
+                    logger.warning("${player.name} sent cmd packet without type field")
+                    return
+                }
 
         when (type) {
             "console_cmd" -> {
@@ -242,6 +289,7 @@ class VenusPlugin : JavaPlugin(), PluginMessageListener, Listener {
                 logger.info("${player.name} executed console command: ${packet.command}")
                 server.dispatchCommand(server.consoleSender, packet.command)
             }
+
             "stat_subscribe" -> {
                 val packet = json.decodeFromString<StatSubscribePacket>(data)
                 logger.info("${player.name} subscribed to stats: ${packet.stats} every ${packet.intervalSeconds}s")
@@ -249,17 +297,24 @@ class VenusPlugin : JavaPlugin(), PluginMessageListener, Listener {
                     sendDataToPlayer(player, statsJson)
                 }
             }
+
             "stat_get" -> {
                 val packet = json.decodeFromString<StatGetPacket>(data)
                 val statsJson = StatsCollector.buildStatsJson(server, packet.stats)
                 sendDataToPlayer(player, statsJson)
                 logger.info("${player.name} requested one-time stats: ${packet.stats}")
             }
-            else -> logger.warning("${player.name} sent unknown cmd packet type: $type")
+
+            else -> {
+                logger.warning("${player.name} sent unknown cmd packet type: $type")
+            }
         }
     }
 
-    private fun sendDataToPlayer(player: Player, data: String) {
+    private fun sendDataToPlayer(
+        player: Player,
+        data: String,
+    ) {
         val id = Identifier.fromNamespaceAndPath("venus", "data")
         val packet = ClientboundCustomPayloadPacket(DiscardedPayload(id, data.toByteArray(Charsets.UTF_8)))
         (player as CraftPlayer).handle.connection.send(packet)
@@ -272,7 +327,11 @@ class VenusPlugin : JavaPlugin(), PluginMessageListener, Listener {
         logger.info("Sent venus:ready to ${player.name}")
     }
 
-    fun sendAuthChallengeTo(player: Player, challenge: ByteArray, serverSig: ByteArray) {
+    fun sendAuthChallengeTo(
+        player: Player,
+        challenge: ByteArray,
+        serverSig: ByteArray,
+    ) {
         sendAuthChallenge(player, challenge, serverSig)
     }
 }
