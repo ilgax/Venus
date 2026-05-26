@@ -128,7 +128,7 @@ class VenusMod : ClientModInitializer {
     override fun onInitializeClient() {
         println("Venus mod loaded!")
 
-        val venusFolder = File(Minecraft.getInstance().gameDirectory, "venus")
+        val venusFolder = File(Minecraft.getInstance().gameDirectory, "config/venus")
         keyManager = KeyManager(venusFolder)
         keyManager.loadOrGenerate()
         println("Venus client keypair loaded")
