@@ -21,3 +21,10 @@ data class ConsoleCmdPacket(
     val type: String,
     val command: String,
 )
+
+@Serializable
+data class CmdResponsePacket(
+    val type: String,
+    val command: String,
+    val lines: List<String>,
+)

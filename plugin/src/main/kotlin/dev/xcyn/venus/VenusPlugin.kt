@@ -8,6 +8,7 @@ import dev.xcyn.venus.auth.PendingSession
 import dev.xcyn.venus.auth.SessionManager
 import dev.xcyn.venus.commands.VenusCommand
 import dev.xcyn.venus.config.VenusConfig
+import dev.xcyn.venus.stats.CmdResponsePacket
 import dev.xcyn.venus.stats.ConsoleCmdPacket
 import dev.xcyn.venus.stats.StatGetPacket
 import dev.xcyn.venus.stats.StatSubscribePacket
@@ -16,10 +17,7 @@ import dev.xcyn.venus.stats.StatsCollector
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket
-import net.minecraft.network.protocol.common.custom.DiscardedPayload
-import net.minecraft.resources.Identifier
-import org.bukkit.craftbukkit.entity.CraftPlayer
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
 import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
@@ -52,6 +50,11 @@ class VenusPlugin :
         server.messenger.registerIncomingPluginChannel(this, "venus:auth", this)
         server.messenger.registerIncomingPluginChannel(this, "venus:error", this)
         server.messenger.registerIncomingPluginChannel(this, "venus:cmd", this)
+
+        server.messenger.registerOutgoingPluginChannel(this, "venus:key")
+        server.messenger.registerOutgoingPluginChannel(this, "venus:auth")
+        server.messenger.registerOutgoingPluginChannel(this, "venus:data")
+        server.messenger.registerOutgoingPluginChannel(this, "venus:ready")
     }
 
     override fun onDisable() {
@@ -287,7 +290,20 @@ class VenusPlugin :
             "console_cmd" -> {
                 val packet = json.decodeFromString<ConsoleCmdPacket>(data)
                 logger.info("${player.name} executed console command: ${packet.command}")
-                server.dispatchCommand(server.consoleSender, packet.command)
+                val lines = mutableListOf<String>()
+                val sender =
+                    server.createCommandSender { component ->
+                        lines.add(PlainTextComponentSerializer.plainText().serialize(component))
+                    }
+                server.dispatchCommand(sender, packet.command)
+                if (lines.isNotEmpty()) {
+                    val response =
+                        json.encodeToString(
+                            CmdResponsePacket.serializer(),
+                            CmdResponsePacket(type = "cmd_response", command = packet.command, lines = lines),
+                        )
+                    sendDataToPlayer(player, response)
+                }
             }
 
             "stat_subscribe" -> {

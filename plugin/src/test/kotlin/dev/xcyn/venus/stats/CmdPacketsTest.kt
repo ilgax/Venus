@@ -80,4 +80,32 @@ class CmdPacketsTest {
         val decoded = json.decodeFromString<ConsoleCmdPacket>(encoded)
         assertEquals(packet.command, decoded.command)
     }
+
+    @Test
+    fun `CmdResponsePacket serialization roundtrip`() {
+        val packet =
+            CmdResponsePacket(
+                type = "cmd_response",
+                command = "say hello",
+                lines = listOf("[Server] hello"),
+            )
+        val encoded = json.encodeToString(CmdResponsePacket.serializer(), packet)
+        val decoded = json.decodeFromString<CmdResponsePacket>(encoded)
+        assertEquals(packet.type, decoded.type)
+        assertEquals(packet.command, decoded.command)
+        assertEquals(packet.lines, decoded.lines)
+    }
+
+    @Test
+    fun `CmdResponsePacket with empty lines list`() {
+        val packet =
+            CmdResponsePacket(
+                type = "cmd_response",
+                command = "help",
+                lines = emptyList(),
+            )
+        val encoded = json.encodeToString(CmdResponsePacket.serializer(), packet)
+        val decoded = json.decodeFromString<CmdResponsePacket>(encoded)
+        assertEquals(emptyList(), decoded.lines)
+    }
 }
