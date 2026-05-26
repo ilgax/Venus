@@ -44,17 +44,20 @@ tasks.jar {
 tasks.remapJar {
     archiveBaseName = "venus-mod"
     from(zipTree(project(":common").tasks.jar.get().archiveFile))
-    finalizedBy("deploy")
 }
 
 tasks.withType<JavaCompile> {
     options.compilerArgs.add("-Xlint:-unchecked")
 }
 
-tasks.register<Copy>("deploy") {
-    from(layout.buildDirectory.file("libs/venus-mod-${project.version}.jar"))
-    into("C:\\Users\\ilgax\\AppData\\Roaming\\ModrinthApp\\profiles\\Venus\\mods")
-    dependsOn(tasks.remapJar)
+val deployDir: String? = findProperty("venus.deploy.modDir") as? String
+if (deployDir != null) {
+    tasks.register<Copy>("deploy") {
+        from(layout.buildDirectory.file("libs/venus-mod-${project.version}.jar"))
+        into(deployDir)
+        dependsOn(tasks.remapJar)
+    }
+    tasks.remapJar { finalizedBy("deploy") }
 }
 
 loom {

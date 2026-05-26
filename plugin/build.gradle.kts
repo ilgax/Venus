@@ -36,12 +36,12 @@ tasks.jar {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
-tasks.register<Copy>("deploy") {
-    from(layout.buildDirectory.file("libs/venus-plugin-${project.version}.jar"))
-    into("C:\\Users\\ilgax\\OneDrive\\Masaüstü\\VenusTestServer\\plugins")
-    dependsOn(tasks.build)
-}
-
-tasks.build {
-    finalizedBy("deploy")
+val deployDir: String? = findProperty("venus.deploy.pluginDir") as? String
+if (deployDir != null) {
+    tasks.register<Copy>("deploy") {
+        from(layout.buildDirectory.file("libs/venus-plugin-${project.version}.jar"))
+        into(deployDir)
+        dependsOn(tasks.build)
+    }
+    tasks.build { finalizedBy("deploy") }
 }
