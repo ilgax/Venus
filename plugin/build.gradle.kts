@@ -14,6 +14,7 @@ dependencies {
     compileOnly("io.netty:netty-buffer:4.1.97.Final")
     implementation(kotlin("stdlib"))
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.10.0")
+    testImplementation(kotlin("test"))
 }
 
 kotlin {
