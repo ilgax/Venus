@@ -1,8 +1,15 @@
-name: Build
+name: Mod CI
 
 on:
   push:
     branches: [master]
+    paths:
+      - 'mod/**'
+      - 'gradle/**'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle.properties'
+      - '.github/workflows/mod.yml'
   pull_request:
     branches: [master]
   workflow_dispatch: {}
@@ -10,9 +17,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        subproject: [plugin, mod]
     steps:
       - uses: actions/checkout@v6
 
@@ -26,12 +30,12 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build and test ${{ matrix.subproject }}
-        run: ./gradlew :${{ matrix.subproject }}:check
+      - name: Build and test
+        run: ./gradlew :mod:check
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ matrix.subproject }}
-          path: ${{ matrix.subproject }}/build/libs/*.jar
+          name: venus-mod
+          path: mod/build/libs/*.jar
           retention-days: 7

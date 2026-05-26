@@ -1,0 +1,41 @@
+name: Plugin CI
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'plugin/**'
+      - 'gradle/**'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle.properties'
+      - '.github/workflows/plugin.yml'
+  pull_request:
+    branches: [master]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build and test
+        run: ./gradlew :plugin:check
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: venus-plugin
+          path: plugin/build/libs/*.jar
+          retention-days: 7
