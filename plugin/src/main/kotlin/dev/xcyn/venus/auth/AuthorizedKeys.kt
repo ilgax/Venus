@@ -3,7 +3,6 @@ package dev.xcyn.venus.auth
 import java.io.File
 
 object AuthorizedKeys {
-
     private lateinit var keysFile: File
 
     fun init(dataFolder: File) {
@@ -13,18 +12,17 @@ object AuthorizedKeys {
         if (!keysFile.exists()) keysFile.createNewFile()
     }
 
-    fun isAuthorized(publicKeyBase64: String): Boolean {
-        return keysFile.readLines().any {
+    fun isAuthorized(publicKeyBase64: String): Boolean =
+        keysFile.readLines().any {
             it.trim().split(" ")[0] == publicKeyBase64.trim()
         }
-    }
 
-    fun authorize(publicKeyBase64: String, comment: String) {
+    fun authorize(
+        publicKeyBase64: String,
+        comment: String,
+    ) {
         keysFile.appendText("$publicKeyBase64 $comment\n")
     }
 
-    fun count(): Int {
-        return keysFile.readLines().count { it.isNotBlank() }
-    }
-
+    fun count(): Int = keysFile.readLines().count { it.isNotBlank() }
 }

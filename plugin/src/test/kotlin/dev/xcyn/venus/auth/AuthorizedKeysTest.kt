@@ -8,12 +8,14 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class AuthorizedKeysTest {
-
     private lateinit var tempDir: java.io.File
 
     @BeforeTest
     fun setup() {
-        tempDir = kotlin.io.path.createTempDirectory("venus-test-authkeys").toFile()
+        tempDir =
+            kotlin.io.path
+                .createTempDirectory("venus-test-authkeys")
+                .toFile()
         AuthorizedKeys.init(tempDir)
     }
 

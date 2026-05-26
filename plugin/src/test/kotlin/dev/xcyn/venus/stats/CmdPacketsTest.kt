@@ -5,16 +5,16 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class CmdPacketsTest {
-
     private val json = Json { ignoreUnknownKeys = true }
 
     @Test
     fun `StatSubscribePacket serialization roundtrip`() {
-        val packet = StatSubscribePacket(
-            type = "stat_subscribe",
-            intervalSeconds = 5,
-            stats = listOf("tps", "ram", "mspt", "uptime")
-        )
+        val packet =
+            StatSubscribePacket(
+                type = "stat_subscribe",
+                intervalSeconds = 5,
+                stats = listOf("tps", "ram", "mspt", "uptime"),
+            )
         val encoded = json.encodeToString(StatSubscribePacket.serializer(), packet)
         val decoded = json.decodeFromString<StatSubscribePacket>(encoded)
         assertEquals(packet.type, decoded.type)

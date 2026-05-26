@@ -8,12 +8,14 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class KeyManagerTest {
-
     private lateinit var tempDir: java.io.File
 
     @BeforeTest
     fun setup() {
-        tempDir = kotlin.io.path.createTempDirectory("venus-test-keys").toFile()
+        tempDir =
+            kotlin.io.path
+                .createTempDirectory("venus-test-keys")
+                .toFile()
     }
 
     @AfterTest

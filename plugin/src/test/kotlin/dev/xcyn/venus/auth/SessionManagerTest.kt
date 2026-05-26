@@ -11,7 +11,6 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class SessionManagerTest {
-
     private val keyPair = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
     private val uuid = UUID.randomUUID()
 
@@ -51,7 +50,10 @@ class SessionManagerTest {
 
     @Test
     fun `addPendingApproval and getPendingApproval roundtrip`() {
-        val b64 = java.util.Base64.getEncoder().encodeToString(keyPair.public.encoded)
+        val b64 =
+            java.util.Base64
+                .getEncoder()
+                .encodeToString(keyPair.public.encoded)
         val approval = PendingApproval(keyPair.public, b64)
         SessionManager.addPendingApproval(uuid, approval)
         val stored = SessionManager.getPendingApproval(uuid)
@@ -60,7 +62,10 @@ class SessionManagerTest {
 
     @Test
     fun `removePendingApproval removes and returns`() {
-        val b64 = java.util.Base64.getEncoder().encodeToString(keyPair.public.encoded)
+        val b64 =
+            java.util.Base64
+                .getEncoder()
+                .encodeToString(keyPair.public.encoded)
         val approval = PendingApproval(keyPair.public, b64)
         SessionManager.addPendingApproval(uuid, approval)
         val removed = SessionManager.removePendingApproval(uuid)
@@ -72,7 +77,10 @@ class SessionManagerTest {
     fun `getNextPendingApproval returns first entry`() {
         val uuid1 = UUID.randomUUID()
         val uuid2 = UUID.randomUUID()
-        val b64 = java.util.Base64.getEncoder().encodeToString(keyPair.public.encoded)
+        val b64 =
+            java.util.Base64
+                .getEncoder()
+                .encodeToString(keyPair.public.encoded)
         val approval1 = PendingApproval(keyPair.public, b64)
         val approval2 = PendingApproval(keyPair.public, "$b64-other")
         try {
@@ -108,7 +116,10 @@ class SessionManagerTest {
     @Test
     fun `deactivate removes all three associations`() {
         val challenge = ByteArray(32) { 7 }
-        val b64 = java.util.Base64.getEncoder().encodeToString(keyPair.public.encoded)
+        val b64 =
+            java.util.Base64
+                .getEncoder()
+                .encodeToString(keyPair.public.encoded)
         SessionManager.addPending(uuid, PendingSession(keyPair.public, challenge))
         SessionManager.addPendingApproval(uuid, PendingApproval(keyPair.public, b64))
         SessionManager.activate(uuid, keyPair.public)

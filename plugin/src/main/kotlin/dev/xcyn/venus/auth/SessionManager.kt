@@ -6,13 +6,13 @@ import java.util.concurrent.ConcurrentHashMap
 
 data class PendingSession(
     val clientPublicKey: PublicKey,
-    val challenge: ByteArray
+    val challenge: ByteArray,
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other !is PendingSession) return false
         return clientPublicKey == other.clientPublicKey &&
-                challenge.contentEquals(other.challenge)
+            challenge.contentEquals(other.challenge)
     }
 
     override fun hashCode(): Int {
@@ -24,7 +24,7 @@ data class PendingSession(
 
 data class PendingApproval(
     val clientPublicKey: PublicKey,
-    val clientPublicKeyBase64: String
+    val clientPublicKeyBase64: String,
 )
 
 object SessionManager {
@@ -33,7 +33,10 @@ object SessionManager {
     private val activeSessions = ConcurrentHashMap<UUID, PublicKey>()
     private val uuidKeyCache = ConcurrentHashMap<UUID, String>()
 
-    fun addPending(uuid: UUID, session: PendingSession) {
+    fun addPending(
+        uuid: UUID,
+        session: PendingSession,
+    ) {
         pendingSessions[uuid] = session
     }
 
@@ -41,7 +44,10 @@ object SessionManager {
 
     fun removePending(uuid: UUID) = pendingSessions.remove(uuid)
 
-    fun addPendingApproval(uuid: UUID, approval: PendingApproval) {
+    fun addPendingApproval(
+        uuid: UUID,
+        approval: PendingApproval,
+    ) {
         pendingApprovals[uuid] = approval
     }
 
@@ -51,7 +57,10 @@ object SessionManager {
 
     fun getNextPendingApproval(): Map.Entry<UUID, PendingApproval>? = pendingApprovals.entries.firstOrNull()
 
-    fun activate(uuid: UUID, publicKey: PublicKey) {
+    fun activate(
+        uuid: UUID,
+        publicKey: PublicKey,
+    ) {
         activeSessions[uuid] = publicKey
     }
 
@@ -63,7 +72,10 @@ object SessionManager {
         pendingApprovals.remove(uuid)
     }
 
-    fun cacheUUID(uuid: UUID, publicKeyBase64: String) {
+    fun cacheUUID(
+        uuid: UUID,
+        publicKeyBase64: String,
+    ) {
         uuidKeyCache[uuid] = publicKeyBase64
     }
 

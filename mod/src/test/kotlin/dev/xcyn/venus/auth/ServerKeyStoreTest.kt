@@ -9,12 +9,14 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ServerKeyStoreTest {
-
     private lateinit var tempDir: java.io.File
 
     @BeforeTest
     fun setup() {
-        tempDir = kotlin.io.path.createTempDirectory("venus-test-sks").toFile()
+        tempDir =
+            kotlin.io.path
+                .createTempDirectory("venus-test-sks")
+                .toFile()
         ServerKeyStore.init(tempDir)
     }
 

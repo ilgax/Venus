@@ -8,7 +8,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class HandshakeTest {
-
     private val keyPair = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
 
     @Test
@@ -50,7 +49,10 @@ class HandshakeTest {
 
     @Test
     fun `decodePublicKey roundtrip`() {
-        val b64 = java.util.Base64.getEncoder().encodeToString(keyPair.public.encoded)
+        val b64 =
+            java.util.Base64
+                .getEncoder()
+                .encodeToString(keyPair.public.encoded)
         val decoded = Handshake.decodePublicKey(b64)
         assertEquals(keyPair.public, decoded)
     }

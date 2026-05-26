@@ -3,7 +3,6 @@ package dev.xcyn.venus.config
 import org.bukkit.plugin.java.JavaPlugin
 
 object VenusConfig {
-
     private const val DEFAULT_MAX_USERS = 1
     private const val DEFAULT_SESSION_TIMEOUT = 60
     private const val DEFAULT_CACHE_VERIFIED_UUID = true
@@ -24,6 +23,8 @@ object VenusConfig {
         sessionTimeoutSeconds = config.getInt("session_timeout_seconds", DEFAULT_SESSION_TIMEOUT)
         cacheVerifiedUuid = config.getBoolean("cache_verified_uuid", DEFAULT_CACHE_VERIFIED_UUID)
 
-        plugin.logger.info("Config loaded — max_users: $maxUsers, session_timeout: ${sessionTimeoutSeconds}s, cache_uuid: $cacheVerifiedUuid")
+        plugin.logger.info(
+            "Config loaded — max_users: $maxUsers, session_timeout: ${sessionTimeoutSeconds}s, cache_uuid: $cacheVerifiedUuid",
+        )
     }
 }

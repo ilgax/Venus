@@ -21,86 +21,107 @@ import java.io.File
 import java.util.Base64
 
 class VenusMod : ClientModInitializer {
-
     companion object {
         lateinit var keyManager: KeyManager
         var sessionActive = false
     }
 
     data object HelloPayload : CustomPacketPayload {
-        val TYPE = CustomPacketPayload.Type<HelloPayload>(
-            Identifier.fromNamespaceAndPath("venus", "hello")
-        )
+        val TYPE =
+            CustomPacketPayload.Type<HelloPayload>(
+                Identifier.fromNamespaceAndPath("venus", "hello"),
+            )
         val CODEC: StreamCodec<FriendlyByteBuf, HelloPayload> =
             StreamCodec.unit(HelloPayload)
+
         override fun type(): CustomPacketPayload.Type<HelloPayload> = TYPE
     }
 
-    data class ClientKeyPayload(val keyBase64: String) : CustomPacketPayload {
+    data class ClientKeyPayload(
+        val keyBase64: String,
+    ) : CustomPacketPayload {
         companion object {
-            val TYPE = CustomPacketPayload.Type<ClientKeyPayload>(
-                Identifier.fromNamespaceAndPath("venus", "key")
-            )
-            val CODEC: StreamCodec<FriendlyByteBuf, ClientKeyPayload> = StreamCodec.of(
-                { buf, payload -> buf.writeBytes(payload.keyBase64.toByteArray(Charsets.UTF_8)) },
-                { buf ->
-                    val bytes = ByteArray(buf.readableBytes())
-                    buf.readBytes(bytes)
-                    ClientKeyPayload(bytes.toString(Charsets.UTF_8))
-                }
-            )
+            val TYPE =
+                CustomPacketPayload.Type<ClientKeyPayload>(
+                    Identifier.fromNamespaceAndPath("venus", "key"),
+                )
+            val CODEC: StreamCodec<FriendlyByteBuf, ClientKeyPayload> =
+                StreamCodec.of(
+                    { buf, payload -> buf.writeBytes(payload.keyBase64.toByteArray(Charsets.UTF_8)) },
+                    { buf ->
+                        val bytes = ByteArray(buf.readableBytes())
+                        buf.readBytes(bytes)
+                        ClientKeyPayload(bytes.toString(Charsets.UTF_8))
+                    },
+                )
         }
+
         override fun type() = TYPE
     }
 
-    data class AuthResponsePayload(val response: String) : CustomPacketPayload {
+    data class AuthResponsePayload(
+        val response: String,
+    ) : CustomPacketPayload {
         companion object {
-            val TYPE = CustomPacketPayload.Type<AuthResponsePayload>(
-                Identifier.fromNamespaceAndPath("venus", "auth")
-            )
-            val CODEC: StreamCodec<FriendlyByteBuf, AuthResponsePayload> = StreamCodec.of(
-                { buf, payload -> buf.writeBytes(payload.response.toByteArray(Charsets.UTF_8)) },
-                { buf ->
-                    val bytes = ByteArray(buf.readableBytes())
-                    buf.readBytes(bytes)
-                    AuthResponsePayload(bytes.toString(Charsets.UTF_8))
-                }
-            )
+            val TYPE =
+                CustomPacketPayload.Type<AuthResponsePayload>(
+                    Identifier.fromNamespaceAndPath("venus", "auth"),
+                )
+            val CODEC: StreamCodec<FriendlyByteBuf, AuthResponsePayload> =
+                StreamCodec.of(
+                    { buf, payload -> buf.writeBytes(payload.response.toByteArray(Charsets.UTF_8)) },
+                    { buf ->
+                        val bytes = ByteArray(buf.readableBytes())
+                        buf.readBytes(bytes)
+                        AuthResponsePayload(bytes.toString(Charsets.UTF_8))
+                    },
+                )
         }
+
         override fun type() = TYPE
     }
 
-    data class ErrorPayload(val reason: String) : CustomPacketPayload {
+    data class ErrorPayload(
+        val reason: String,
+    ) : CustomPacketPayload {
         companion object {
-            val TYPE = CustomPacketPayload.Type<ErrorPayload>(
-                Identifier.fromNamespaceAndPath("venus", "error")
-            )
-            val CODEC: StreamCodec<FriendlyByteBuf, ErrorPayload> = StreamCodec.of(
-                { buf, payload -> buf.writeBytes(payload.reason.toByteArray(Charsets.UTF_8)) },
-                { buf ->
-                    val bytes = ByteArray(buf.readableBytes())
-                    buf.readBytes(bytes)
-                    ErrorPayload(bytes.toString(Charsets.UTF_8))
-                }
-            )
+            val TYPE =
+                CustomPacketPayload.Type<ErrorPayload>(
+                    Identifier.fromNamespaceAndPath("venus", "error"),
+                )
+            val CODEC: StreamCodec<FriendlyByteBuf, ErrorPayload> =
+                StreamCodec.of(
+                    { buf, payload -> buf.writeBytes(payload.reason.toByteArray(Charsets.UTF_8)) },
+                    { buf ->
+                        val bytes = ByteArray(buf.readableBytes())
+                        buf.readBytes(bytes)
+                        ErrorPayload(bytes.toString(Charsets.UTF_8))
+                    },
+                )
         }
+
         override fun type() = TYPE
     }
 
-    data class CmdPayload(val command: String) : CustomPacketPayload {
+    data class CmdPayload(
+        val command: String,
+    ) : CustomPacketPayload {
         companion object {
-            val TYPE = CustomPacketPayload.Type<CmdPayload>(
-                Identifier.fromNamespaceAndPath("venus", "cmd")
-            )
-            val CODEC: StreamCodec<FriendlyByteBuf, CmdPayload> = StreamCodec.of(
-                { buf, payload -> buf.writeBytes(payload.command.toByteArray(Charsets.UTF_8)) },
-                { buf ->
-                    val bytes = ByteArray(buf.readableBytes())
-                    buf.readBytes(bytes)
-                    CmdPayload(bytes.toString(Charsets.UTF_8))
-                }
-            )
+            val TYPE =
+                CustomPacketPayload.Type<CmdPayload>(
+                    Identifier.fromNamespaceAndPath("venus", "cmd"),
+                )
+            val CODEC: StreamCodec<FriendlyByteBuf, CmdPayload> =
+                StreamCodec.of(
+                    { buf, payload -> buf.writeBytes(payload.command.toByteArray(Charsets.UTF_8)) },
+                    { buf ->
+                        val bytes = ByteArray(buf.readableBytes())
+                        buf.readBytes(bytes)
+                        CmdPayload(bytes.toString(Charsets.UTF_8))
+                    },
+                )
         }
+
         override fun type() = TYPE
     }
 
@@ -127,10 +148,11 @@ class VenusMod : ClientModInitializer {
             val serverKeyBase64 = payload.bytes().toString(Charsets.UTF_8)
             println("Received server public key: $serverKeyBase64")
 
-            val (host, port) = getServerAddress() ?: run {
-                println("Venus: could not determine server address - aborting")
-                return@registerGlobalReceiver
-            }
+            val (host, port) =
+                getServerAddress() ?: run {
+                    println("Venus: could not determine server address - aborting")
+                    return@registerGlobalReceiver
+                }
 
             val storedKey = ServerKeyStore.getStoredKey(host, port)
 
@@ -161,10 +183,11 @@ class VenusMod : ClientModInitializer {
             val challenge = Base64.getDecoder().decode(challengeB64)
             val serverSig = Base64.getDecoder().decode(serverSigB64)
 
-            val (host, port) = getServerAddress() ?: run {
-                println("Venus: could not determine server address - aborting")
-                return@registerGlobalReceiver
-            }
+            val (host, port) =
+                getServerAddress() ?: run {
+                    println("Venus: could not determine server address - aborting")
+                    return@registerGlobalReceiver
+                }
 
             val storedKeyB64 = ServerKeyStore.getStoredKey(host, port)
             if (storedKeyB64 == null) {
@@ -188,7 +211,9 @@ class VenusMod : ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(VenusRawReadyPayload.TYPE) { _, _ ->
             println("Venus: session active!")
             sessionActive = true
-            ClientPlayNetworking.send(CmdPayload("""{"type":"stat_subscribe","interval_seconds":2,"stats":["tps","ram","mspt","uptime"]}"""))
+            ClientPlayNetworking.send(
+                CmdPayload("""{"type":"stat_subscribe","interval_seconds":2,"stats":["tps","ram","mspt","uptime"]}"""),
+            )
             // TODO: Open gui
         }
 

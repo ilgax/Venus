@@ -10,9 +10,13 @@ import io.papermc.paper.command.brigadier.BasicCommand
 import io.papermc.paper.command.brigadier.CommandSourceStack
 import org.bukkit.command.ConsoleCommandSender
 
-class VenusCommand(private val plugin: VenusPlugin) : BasicCommand {
-
-    override fun execute(stack: CommandSourceStack, args: Array<String>) {
+class VenusCommand(
+    private val plugin: VenusPlugin,
+) : BasicCommand {
+    override fun execute(
+        stack: CommandSourceStack,
+        args: Array<String>,
+    ) {
         val sender = stack.sender
 
         if (args.isEmpty()) {
@@ -31,6 +35,7 @@ class VenusCommand(private val plugin: VenusPlugin) : BasicCommand {
                     "deny" -> handleDeny(sender)
                 }
             }
+
             "reload" -> {
                 if (sender !is ConsoleCommandSender && !sender.isPermissionSet("venus.reload")) {
                     sender.sendMessage("You don't have permission to use this command.")
@@ -40,7 +45,10 @@ class VenusCommand(private val plugin: VenusPlugin) : BasicCommand {
                 sender.sendMessage("Venus config reloaded.")
                 plugin.logger.info("Venus config reloaded by ${sender.name}.")
             }
-            else -> sender.sendMessage("Unknown subcommand. Use allow, deny, or reload.")
+
+            else -> {
+                sender.sendMessage("Unknown subcommand. Use allow, deny, or reload.")
+            }
         }
     }
 

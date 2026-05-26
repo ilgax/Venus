@@ -17,15 +17,22 @@ object Handshake {
         return challenge
     }
 
-    fun sign(data: ByteArray, privateKey: PrivateKey): ByteArray {
+    fun sign(
+        data: ByteArray,
+        privateKey: PrivateKey,
+    ): ByteArray {
         val signature = Signature.getInstance("Ed25519")
         signature.initSign(privateKey)
         signature.update(data)
         return signature.sign()
     }
 
-    fun verify(data: ByteArray, signatureBytes: ByteArray, publicKey: PublicKey): Boolean {
-        return try {
+    fun verify(
+        data: ByteArray,
+        signatureBytes: ByteArray,
+        publicKey: PublicKey,
+    ): Boolean =
+        try {
             val signature = Signature.getInstance("Ed25519")
             signature.initVerify(publicKey)
             signature.update(data)
@@ -33,7 +40,6 @@ object Handshake {
         } catch (_: Exception) {
             false
         }
-    }
 
     fun decodePublicKey(base64: String): PublicKey {
         val keyBytes = Base64.getDecoder().decode(base64)
