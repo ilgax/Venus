@@ -10,6 +10,7 @@ public record VenusRawReadyPayload(byte[] bytes) implements CustomPacketPayload 
 
     public static final Identifier ID = Identifier.fromNamespaceAndPath("venus", "ready");
     public static final Type<VenusRawReadyPayload> TYPE = new Type<>(ID);
+    @SuppressWarnings("unused")
     public static final StreamCodec<RegistryFriendlyByteBuf, VenusRawReadyPayload> CODEC = StreamCodec.of(
             (buf, payload) -> {},
             buf -> new VenusRawReadyPayload(new byte[0])

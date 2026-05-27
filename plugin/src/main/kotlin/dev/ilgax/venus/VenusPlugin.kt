@@ -254,14 +254,14 @@ class VenusPlugin :
 
         val challenge = try {
             Base64.getDecoder().decode(challengeB64)
-        } catch (e: IllegalArgumentException) {
+        } catch (_: IllegalArgumentException) {
             logger.warning("Invalid Base64 in auth challenge from ${player.name}")
             SessionManager.removePending(player.uniqueId)
             return
         }
         val clientSig = try {
             Base64.getDecoder().decode(clientSigB64)
-        } catch (e: IllegalArgumentException) {
+        } catch (_: IllegalArgumentException) {
             logger.warning("Invalid Base64 in auth signature from ${player.name}")
             SessionManager.removePending(player.uniqueId)
             return
