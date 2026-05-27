@@ -18,6 +18,7 @@ dependencies {
     implementation(kotlin("stdlib"))
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.10.0")
     testImplementation(kotlin("test"))
+    testImplementation("io.mockk:mockk:1.13.10")
 }
 
 kotlin {
@@ -46,4 +47,8 @@ if (deployDir != null) {
         dependsOn(tasks.build)
     }
     tasks.build { finalizedBy("deploy") }
+}
+
+tasks.withType<Test>().configureEach {
+    systemProperty("net.bytebuddy.experimental", "true")
 }

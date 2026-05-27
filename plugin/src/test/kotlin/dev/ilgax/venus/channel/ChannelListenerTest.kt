@@ -19,4 +19,29 @@ class ChannelListenerTest {
     fun `unknown inbound channel is ignored`() {
         assertNull(IncomingChannel.fromChannel("venus:transfer"))
     }
+
+    @Test
+    fun `onPluginMessageReceived routes hello`() {
+        val authHandler = io.mockk.mockk<dev.ilgax.venus.handlers.AuthHandler>(relaxed = true)
+        val packetRouter = io.mockk.mockk<PacketRouter>(relaxed = true)
+        val player = io.mockk.mockk<org.bukkit.entity.Player>(relaxed = true)
+        val listener = ChannelListener(authHandler, packetRouter)
+
+        val message = "hello data".toByteArray(Charsets.UTF_8)
+        listener.onPluginMessageReceived(VenusChannels.HELLO, player, message)
+        io.mockk.verify { authHandler.handleHello(player) }
+    }
+
+    @Test
+    fun `onPluginMessageReceived routes cmd`() {
+        val authHandler = io.mockk.mockk<dev.ilgax.venus.handlers.AuthHandler>(relaxed = true)
+        val packetRouter = io.mockk.mockk<PacketRouter>(relaxed = true)
+        val player = io.mockk.mockk<org.bukkit.entity.Player>(relaxed = true)
+        val listener = ChannelListener(authHandler, packetRouter)
+
+        val data = "cmd data"
+        val message = data.toByteArray(Charsets.UTF_8)
+        listener.onPluginMessageReceived(VenusChannels.CMD, player, message)
+        io.mockk.verify { packetRouter.handleCommand(player, data) }
+    }
 }
