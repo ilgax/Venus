@@ -18,6 +18,10 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
+import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket
+import net.minecraft.network.protocol.common.custom.DiscardedPayload
+import net.minecraft.resources.Identifier
+import org.bukkit.craftbukkit.entity.CraftPlayer
 import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
@@ -50,11 +54,6 @@ class VenusPlugin :
         server.messenger.registerIncomingPluginChannel(this, "venus:auth", this)
         server.messenger.registerIncomingPluginChannel(this, "venus:error", this)
         server.messenger.registerIncomingPluginChannel(this, "venus:cmd", this)
-
-        server.messenger.registerOutgoingPluginChannel(this, "venus:key")
-        server.messenger.registerOutgoingPluginChannel(this, "venus:auth")
-        server.messenger.registerOutgoingPluginChannel(this, "venus:data")
-        server.messenger.registerOutgoingPluginChannel(this, "venus:ready")
     }
 
     override fun onDisable() {
@@ -64,12 +63,6 @@ class VenusPlugin :
         server.messenger.unregisterIncomingPluginChannel(this, "venus:auth")
         server.messenger.unregisterIncomingPluginChannel(this, "venus:error")
         server.messenger.unregisterIncomingPluginChannel(this, "venus:cmd")
-
-        server.messenger.unregisterOutgoingPluginChannel(this, "venus:key")
-        server.messenger.unregisterOutgoingPluginChannel(this, "venus:auth")
-        server.messenger.unregisterOutgoingPluginChannel(this, "venus:data")
-        server.messenger.unregisterOutgoingPluginChannel(this, "venus:ready")
-
         StatSubscriptionManager.cancelAll()
     }
 
@@ -141,7 +134,11 @@ class VenusPlugin :
     }
 
     private fun sendServerPublicKey(player: Player) {
-        player.sendPluginMessage(this, "venus:key", keyManager.publicKeyBase64.toByteArray(Charsets.UTF_8))
+        val keyBytes = keyManager.publicKeyBase64.toByteArray(Charsets.UTF_8)
+        val id = Identifier.fromNamespaceAndPath("venus", "key")
+        val payload = DiscardedPayload(id, keyBytes)
+        val packet = ClientboundCustomPayloadPacket(payload)
+        (player as CraftPlayer).handle.connection.send(packet)
         logger.info("Sent server public key to ${player.name}")
     }
 
@@ -217,7 +214,10 @@ class VenusPlugin :
     ) {
         val challengeB64 = Base64.getEncoder().encodeToString(challenge)
         val sigB64 = Base64.getEncoder().encodeToString(serverSig)
-        player.sendPluginMessage(this, "venus:auth", "$challengeB64.$sigB64".toByteArray(Charsets.UTF_8))
+        val payload = "$challengeB64.$sigB64".toByteArray(Charsets.UTF_8)
+        val id = Identifier.fromNamespaceAndPath("venus", "auth")
+        val packet = ClientboundCustomPayloadPacket(DiscardedPayload(id, payload))
+        (player as CraftPlayer).handle.connection.send(packet)
     }
 
     private fun handleAuthResponse(
@@ -330,11 +330,15 @@ class VenusPlugin :
         player: Player,
         data: String,
     ) {
-        player.sendPluginMessage(this, "venus:data", data.toByteArray(Charsets.UTF_8))
+        val id = Identifier.fromNamespaceAndPath("venus", "data")
+        val packet = ClientboundCustomPayloadPacket(DiscardedPayload(id, data.toByteArray(Charsets.UTF_8)))
+        (player as CraftPlayer).handle.connection.send(packet)
     }
 
     fun sendReady(player: Player) {
-        player.sendPluginMessage(this, "venus:ready", ByteArray(0))
+        val id = Identifier.fromNamespaceAndPath("venus", "ready")
+        val packet = ClientboundCustomPayloadPacket(DiscardedPayload(id, ByteArray(0)))
+        (player as CraftPlayer).handle.connection.send(packet)
         logger.info("Sent venus:ready to ${player.name}")
     }
 

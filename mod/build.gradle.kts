@@ -21,7 +21,7 @@ dependencies {
     modImplementation("net.fabricmc:fabric-loader:$fabricLoaderVersion")
     modImplementation("net.fabricmc.fabric-api:fabric-api:$fabricApiVersion")
     modImplementation("net.fabricmc:fabric-language-kotlin:$fabricLanguageKotlinVersion")
-    testImplementation(project(":common"))
+    implementation(project(":common"))
     testImplementation(kotlin("test"))
 }
 
@@ -34,9 +34,6 @@ sourceSets {
         java {
             srcDir("src/main/java")
         }
-        kotlin {
-            srcDir(project(":common").file("src/main/kotlin"))
-        }
     }
 }
 
@@ -46,6 +43,7 @@ tasks.jar {
 
 tasks.remapJar {
     archiveBaseName = "venus-mod"
+    from(zipTree(project(":common").tasks.jar.get().archiveFile))
 }
 
 tasks.withType<JavaCompile> {
