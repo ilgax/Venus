@@ -12,8 +12,8 @@ repositories {
 
 val minecraftVersion = "1.21.11"
 val fabricLoaderVersion = "0.18.4"
-val fabricApiVersion = "0.141.3+1.21.11"
-val fabricLanguageKotlinVersion = "1.13.0+kotlin.2.1.0"
+val fabricApiVersion = "0.141.4+1.21.11"
+val fabricLanguageKotlinVersion = "1.13.11+kotlin.2.3.21"
 
 dependencies {
     minecraft("com.mojang:minecraft:$minecraftVersion")

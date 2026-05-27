@@ -1,10 +1,10 @@
 name: Venus
 version: "${version}"
-main: dev.xcyn.venus.VenusPlugin
+main: dev.ilgax.venus.VenusPlugin
 api-version: "1.21"
 description: In-game server management over plugin messaging channels
 authors:
-  - xcyn
+  - ilgax
 license: AGPL-3.0-or-later
 
 permissions:
