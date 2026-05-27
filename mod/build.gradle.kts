@@ -1,6 +1,7 @@
 plugins {
     kotlin("jvm")
     kotlin("plugin.serialization")
+    id("org.jlleitschuh.gradle.ktlint")
     id("fabric-loom") version "1.15-SNAPSHOT"
     id("maven-publish")
 }
@@ -51,7 +52,14 @@ tasks.jar {
 
 tasks.remapJar {
     archiveBaseName = "venus-mod"
-    from(zipTree(project(":common").tasks.jar.get().archiveFile))
+    from(
+        zipTree(
+            project(":common")
+                .tasks.jar
+                .get()
+                .archiveFile,
+        ),
+    )
 }
 
 tasks.withType<JavaCompile> {

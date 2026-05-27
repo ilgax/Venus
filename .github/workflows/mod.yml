@@ -13,6 +13,10 @@ on:
       - '.github/workflows/mod.yml'
   workflow_dispatch: {}
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -29,12 +33,27 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build and test
-        run: ./gradlew :mod:check
+      - name: Lint, build and test
+        run: ./gradlew :mod:ktlintCheck :mod:build --no-daemon --stacktrace
+
+      - name: Upload test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: mod-test-reports
+          path: |
+            mod/build/test-results/
+            mod/build/reports/tests/
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
           name: venus-mod
-          path: mod/build/libs/*.jar
+          path: |
+            mod/build/libs/venus-mod-*.jar
+            !mod/build/libs/*-dev.jar
+            !mod/build/libs/*-sources.jar
+          if-no-files-found: error
           retention-days: 7

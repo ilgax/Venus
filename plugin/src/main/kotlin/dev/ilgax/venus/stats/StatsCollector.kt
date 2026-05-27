@@ -1,10 +1,10 @@
 package dev.ilgax.venus.stats
 
 import dev.ilgax.venus.protocol.StatsPacket
-import java.math.BigDecimal
-import java.math.RoundingMode
 import kotlinx.serialization.json.Json
 import org.bukkit.Server
+import java.math.BigDecimal
+import java.math.RoundingMode
 
 object StatsCollector {
     private val json = Json { explicitNulls = false }

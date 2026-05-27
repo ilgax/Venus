@@ -45,7 +45,11 @@ class PacketHandler(
         log("Venus data received: $data")
         val type =
             try {
-                json.parseToJsonElement(data).jsonObject["type"]?.jsonPrimitive?.content
+                json
+                    .parseToJsonElement(data)
+                    .jsonObject["type"]
+                    ?.jsonPrimitive
+                    ?.content
             } catch (e: Exception) {
                 log("Venus: invalid data packet - ${e.message}")
                 return

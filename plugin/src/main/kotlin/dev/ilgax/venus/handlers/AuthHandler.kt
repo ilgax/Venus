@@ -94,7 +94,9 @@ class AuthHandler(
             plugin.logger.info("Authorized key recognized for ${player.name} - sending challenge")
         } else {
             if (AuthorizedKeys.count() >= VenusConfig.maxUsers) {
-                plugin.logger.warning("${player.name} tried to connect to Venus but max_users (${VenusConfig.maxUsers}) reached - rejecting.")
+                plugin.logger.warning(
+                    "${player.name} tried to connect to Venus but max_users (${VenusConfig.maxUsers}) reached - rejecting.",
+                )
                 return
             }
 
