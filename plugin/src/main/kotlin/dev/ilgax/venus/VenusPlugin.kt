@@ -6,26 +6,21 @@ import dev.ilgax.venus.auth.KeyManager
 import dev.ilgax.venus.auth.PendingApproval
 import dev.ilgax.venus.auth.PendingSession
 import dev.ilgax.venus.auth.SessionManager
+import dev.ilgax.venus.channel.PacketRouter
 import dev.ilgax.venus.commands.VenusCommand
 import dev.ilgax.venus.config.VenusConfig
+import dev.ilgax.venus.handlers.ConsoleHandler
+import dev.ilgax.venus.handlers.StatsHandler
 import dev.ilgax.venus.protocol.AuthChallengePacket
 import dev.ilgax.venus.protocol.AuthResponsePacket
 import dev.ilgax.venus.protocol.ClientKeyPacket
-import dev.ilgax.venus.protocol.CmdResponsePacket
-import dev.ilgax.venus.protocol.ConsoleCmdPacket
 import dev.ilgax.venus.protocol.ErrorPacket
 import dev.ilgax.venus.protocol.ReadyPacket
 import dev.ilgax.venus.protocol.ServerKeyPacket
-import dev.ilgax.venus.protocol.StatGetPacket
-import dev.ilgax.venus.protocol.StatSubscribePacket
 import dev.ilgax.venus.protocol.VenusChannels
 import dev.ilgax.venus.stats.StatSubscriptionManager
-import dev.ilgax.venus.stats.StatsCollector
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket
 import net.minecraft.network.protocol.common.custom.DiscardedPayload
 import net.minecraft.resources.Identifier
@@ -47,6 +42,7 @@ class VenusPlugin :
     Listener {
     private val json = Json { ignoreUnknownKeys = true }
     private val sessionTimeoutTasks = ConcurrentHashMap<UUID, BukkitTask>()
+    private lateinit var packetRouter: PacketRouter
 
     lateinit var keyManager: KeyManager
 
@@ -57,6 +53,14 @@ class VenusPlugin :
         keyManager.loadOrGenerate()
         logger.info("Server keypair loaded")
         AuthorizedKeys.init(dataFolder)
+        val sendData = { player: Player, data: String -> sendDataToPlayer(player, data) }
+        packetRouter =
+            PacketRouter(
+                this,
+                json,
+                ConsoleHandler(this, json, sendData),
+                StatsHandler(this, json, sendData),
+            )
 
         registerCommand("venus", VenusCommand(this))
         server.pluginManager.registerEvents(this, this)
@@ -133,7 +137,7 @@ class VenusPlugin :
 
             VenusChannels.CMD -> {
                 val data = message.toString(Charsets.UTF_8)
-                handleCmdPacket(player, data)
+                packetRouter.handleCommand(player, data)
             }
         }
     }
@@ -331,84 +335,6 @@ class VenusPlugin :
 
         logger.info("${player.name} authenticated successfully!")
         sendReady(player)
-    }
-
-    private fun handleCmdPacket(
-        player: Player,
-        data: String,
-    ) {
-        if (!SessionManager.isActive(player.uniqueId)) {
-            logger.warning("${player.name} sent cmd packet without active session - ignoring")
-            return
-        }
-
-        val jsonElement = try {
-            json.parseToJsonElement(data)
-        } catch (e: SerializationException) {
-            logger.warning("${player.name} sent malformed cmd packet: ${e.message}")
-            return
-        }
-        val type =
-            jsonElement.jsonObject["type"]?.jsonPrimitive?.content
-                ?: run {
-                    logger.warning("${player.name} sent cmd packet without type field")
-                    return
-                }
-
-        when (type) {
-            "console_cmd" -> {
-                val packet = try {
-                    json.decodeFromString<ConsoleCmdPacket>(data)
-                } catch (e: SerializationException) {
-                    logger.warning("${player.name} sent malformed console_cmd packet: ${e.message}")
-                    return
-                }
-                logger.info("${player.name} executed console command: ${packet.command}")
-                val lines = mutableListOf<String>()
-                val sender =
-                    server.createCommandSender { component ->
-                        lines.add(PlainTextComponentSerializer.plainText().serialize(component))
-                    }
-                server.dispatchCommand(sender, packet.command)
-                if (lines.isNotEmpty()) {
-                    val response =
-                        json.encodeToString(
-                            CmdResponsePacket.serializer(),
-                            CmdResponsePacket(type = "cmd_response", command = packet.command, lines = lines),
-                        )
-                    sendDataToPlayer(player, response)
-                }
-            }
-
-            "stat_subscribe" -> {
-                val packet = try {
-                    json.decodeFromString<StatSubscribePacket>(data)
-                } catch (e: SerializationException) {
-                    logger.warning("${player.name} sent malformed stat_subscribe packet: ${e.message}")
-                    return
-                }
-                logger.info("${player.name} subscribed to stats: ${packet.stats} every ${packet.intervalSeconds}s")
-                StatSubscriptionManager.subscribe(player.uniqueId, packet.stats, packet.intervalSeconds, this) { statsJson ->
-                    sendDataToPlayer(player, statsJson)
-                }
-            }
-
-            "stat_get" -> {
-                val packet = try {
-                    json.decodeFromString<StatGetPacket>(data)
-                } catch (e: SerializationException) {
-                    logger.warning("${player.name} sent malformed stat_get packet: ${e.message}")
-                    return
-                }
-                val statsJson = StatsCollector.buildStatsJson(server, packet.stats)
-                sendDataToPlayer(player, statsJson)
-                logger.info("${player.name} requested one-time stats: ${packet.stats}")
-            }
-
-            else -> {
-                logger.warning("${player.name} sent unknown cmd packet type: $type")
-            }
-        }
     }
 
     private fun sendDataToPlayer(
