@@ -3,6 +3,7 @@ plugins {
     kotlin("plugin.serialization") version "2.3.21"
     id("org.jlleitschuh.gradle.ktlint")
     id("io.papermc.paperweight.userdev") version "2.0.0-beta.19"
+    id("org.jetbrains.kotlinx.kover")
 }
 
 repositories {

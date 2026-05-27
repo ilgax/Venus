@@ -4,6 +4,7 @@ plugins {
     id("org.jlleitschuh.gradle.ktlint")
     id("fabric-loom") version "1.15-SNAPSHOT"
     id("maven-publish")
+    id("org.jetbrains.kotlinx.kover")
 }
 
 repositories {
