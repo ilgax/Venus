@@ -82,4 +82,11 @@ object SessionManager {
     fun getCachedKey(uuid: UUID): String? = uuidKeyCache[uuid]
 
     fun clearUUIDCache(uuid: UUID) = uuidKeyCache.remove(uuid)
+
+    fun clearAll() {
+        pendingSessions.clear()
+        pendingApprovals.clear()
+        activeSessions.clear()
+        uuidKeyCache.clear()
+    }
 }

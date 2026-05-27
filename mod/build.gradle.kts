@@ -37,6 +37,14 @@ sourceSets {
     }
 }
 
+tasks.processResources {
+    val props = mapOf("version" to project.version)
+    inputs.properties(props)
+    filesMatching("fabric.mod.json") {
+        expand(props)
+    }
+}
+
 tasks.jar {
     archiveBaseName = "venus-mod"
 }

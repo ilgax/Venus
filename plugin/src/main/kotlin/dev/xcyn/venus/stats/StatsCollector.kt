@@ -18,7 +18,7 @@ data class StatsPacket(
 object StatsCollector {
     private val json = Json { explicitNulls = false }
 
-    fun getTPS(server: Server): Double = server.tps[0].coerceAtMost(20.0)
+    fun getTPS(server: Server): Double = (server.tps.getOrNull(0) ?: 20.0).coerceAtMost(20.0)
 
     fun getMSPT(server: Server): Double = server.averageTickTime
 

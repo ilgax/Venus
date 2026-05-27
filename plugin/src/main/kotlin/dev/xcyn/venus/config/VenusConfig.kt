@@ -15,8 +15,8 @@ object VenusConfig {
         private set
 
     fun load(plugin: JavaPlugin) {
-        plugin.reloadConfig()
         plugin.saveDefaultConfig()
+        plugin.reloadConfig()
         val config = plugin.config
 
         maxUsers = config.getInt("max_users", DEFAULT_MAX_USERS)

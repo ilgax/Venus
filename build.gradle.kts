@@ -4,7 +4,7 @@ plugins {
 
 allprojects {
     group = "dev.xcyn.venus"
-    version = "0.2.0-SNAPSHOT"
+    version = "0.2.1"
 
     val localFile = rootProject.file("gradle-local.properties")
     if (localFile.exists()) {

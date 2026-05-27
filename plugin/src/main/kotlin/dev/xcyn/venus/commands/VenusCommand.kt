@@ -37,7 +37,7 @@ class VenusCommand(
             }
 
             "reload" -> {
-                if (sender !is ConsoleCommandSender && !sender.isPermissionSet("venus.reload")) {
+                if (sender !is ConsoleCommandSender && !sender.hasPermission("venus.reload")) {
                     sender.sendMessage("You don't have permission to use this command.")
                     return
                 }

@@ -14,6 +14,7 @@ import dev.xcyn.venus.protocol.StatGetPacket
 import dev.xcyn.venus.protocol.StatSubscribePacket
 import dev.xcyn.venus.stats.StatSubscriptionManager
 import dev.xcyn.venus.stats.StatsCollector
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -28,13 +29,17 @@ import org.bukkit.event.Listener
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.plugin.java.JavaPlugin
 import org.bukkit.plugin.messaging.PluginMessageListener
+import org.bukkit.scheduler.BukkitTask
 import java.util.Base64
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 class VenusPlugin :
     JavaPlugin(),
     PluginMessageListener,
     Listener {
     private val json = Json { ignoreUnknownKeys = true }
+    private val sessionTimeoutTasks = ConcurrentHashMap<UUID, BukkitTask>()
 
     lateinit var keyManager: KeyManager
 
@@ -58,12 +63,15 @@ class VenusPlugin :
 
     override fun onDisable() {
         logger.info("Venus disabled")
+        sessionTimeoutTasks.values.forEach { it.cancel() }
+        sessionTimeoutTasks.clear()
+        StatSubscriptionManager.cancelAll()
+        SessionManager.clearAll()
         server.messenger.unregisterIncomingPluginChannel(this, "venus:hello")
         server.messenger.unregisterIncomingPluginChannel(this, "venus:key")
         server.messenger.unregisterIncomingPluginChannel(this, "venus:auth")
         server.messenger.unregisterIncomingPluginChannel(this, "venus:error")
         server.messenger.unregisterIncomingPluginChannel(this, "venus:cmd")
-        StatSubscriptionManager.cancelAll()
     }
 
     override fun onPluginMessageReceived(
@@ -73,6 +81,7 @@ class VenusPlugin :
     ) {
         when (channel) {
             "venus:hello" -> {
+                sessionTimeoutTasks.remove(player.uniqueId)?.cancel()
                 logger.info("Venus mod detected: ${player.name}")
                 sendServerPublicKey(player)
             }
@@ -121,16 +130,18 @@ class VenusPlugin :
 
         logger.info("${event.player.name} disconnected - starting ${VenusConfig.sessionTimeoutSeconds}s Venus session timeout")
 
-        server.scheduler.runTaskLater(
+        val task = server.scheduler.runTaskLater(
             this,
             Runnable {
                 if (!SessionManager.isActive(uuid)) return@Runnable
                 SessionManager.deactivate(uuid)
                 StatSubscriptionManager.cancel(uuid)
+                sessionTimeoutTasks.remove(uuid)
                 logger.info("Venus session expired for ${event.player.name}")
             },
             (VenusConfig.sessionTimeoutSeconds * 20L),
         )
+        sessionTimeoutTasks[uuid] = task
     }
 
     private fun sendServerPublicKey(player: Player) {
@@ -170,6 +181,7 @@ class VenusPlugin :
                     val challenge = Handshake.generateChallenge()
                     val serverSig = Handshake.sign(challenge, keyManager.privateKey)
                     SessionManager.addPending(player.uniqueId, PendingSession(clientPublicKey, challenge))
+                    scheduleAuthChallengeTimeout(player)
                     sendAuthChallenge(player, challenge, serverSig)
                     return
                 }
@@ -180,6 +192,7 @@ class VenusPlugin :
             val challenge = Handshake.generateChallenge()
             val serverSig = Handshake.sign(challenge, keyManager.privateKey)
             SessionManager.addPending(player.uniqueId, PendingSession(clientPublicKey, challenge))
+            scheduleAuthChallengeTimeout(player)
             sendAuthChallenge(player, challenge, serverSig)
             logger.info("Authorized key recognized for ${player.name} - sending challenge")
         } else {
@@ -239,8 +252,20 @@ class VenusPlugin :
             return
         }
 
-        val challenge = Base64.getDecoder().decode(challengeB64)
-        val clientSig = Base64.getDecoder().decode(clientSigB64)
+        val challenge = try {
+            Base64.getDecoder().decode(challengeB64)
+        } catch (e: IllegalArgumentException) {
+            logger.warning("Invalid Base64 in auth challenge from ${player.name}")
+            SessionManager.removePending(player.uniqueId)
+            return
+        }
+        val clientSig = try {
+            Base64.getDecoder().decode(clientSigB64)
+        } catch (e: IllegalArgumentException) {
+            logger.warning("Invalid Base64 in auth signature from ${player.name}")
+            SessionManager.removePending(player.uniqueId)
+            return
+        }
 
         if (!challenge.contentEquals(pending.challenge)) {
             logger.warning("Challenge mismatch from ${player.name}")
@@ -255,6 +280,7 @@ class VenusPlugin :
         }
 
         SessionManager.removePending(player.uniqueId)
+        sessionTimeoutTasks.remove(player.uniqueId)?.cancel()
         SessionManager.activate(player.uniqueId, pending.clientPublicKey)
 
         if (server.onlineMode && VenusConfig.cacheVerifiedUuid) {
@@ -277,7 +303,12 @@ class VenusPlugin :
             return
         }
 
-        val jsonElement = json.parseToJsonElement(data)
+        val jsonElement = try {
+            json.parseToJsonElement(data)
+        } catch (e: SerializationException) {
+            logger.warning("${player.name} sent malformed cmd packet: ${e.message}")
+            return
+        }
         val type =
             jsonElement.jsonObject["type"]?.jsonPrimitive?.content
                 ?: run {
@@ -287,7 +318,12 @@ class VenusPlugin :
 
         when (type) {
             "console_cmd" -> {
-                val packet = json.decodeFromString<ConsoleCmdPacket>(data)
+                val packet = try {
+                    json.decodeFromString<ConsoleCmdPacket>(data)
+                } catch (e: SerializationException) {
+                    logger.warning("${player.name} sent malformed console_cmd packet: ${e.message}")
+                    return
+                }
                 logger.info("${player.name} executed console command: ${packet.command}")
                 val lines = mutableListOf<String>()
                 val sender =
@@ -306,7 +342,12 @@ class VenusPlugin :
             }
 
             "stat_subscribe" -> {
-                val packet = json.decodeFromString<StatSubscribePacket>(data)
+                val packet = try {
+                    json.decodeFromString<StatSubscribePacket>(data)
+                } catch (e: SerializationException) {
+                    logger.warning("${player.name} sent malformed stat_subscribe packet: ${e.message}")
+                    return
+                }
                 logger.info("${player.name} subscribed to stats: ${packet.stats} every ${packet.intervalSeconds}s")
                 StatSubscriptionManager.subscribe(player.uniqueId, packet.stats, packet.intervalSeconds, this) { statsJson ->
                     sendDataToPlayer(player, statsJson)
@@ -314,7 +355,12 @@ class VenusPlugin :
             }
 
             "stat_get" -> {
-                val packet = json.decodeFromString<StatGetPacket>(data)
+                val packet = try {
+                    json.decodeFromString<StatGetPacket>(data)
+                } catch (e: SerializationException) {
+                    logger.warning("${player.name} sent malformed stat_get packet: ${e.message}")
+                    return
+                }
                 val statsJson = StatsCollector.buildStatsJson(server, packet.stats)
                 sendDataToPlayer(player, statsJson)
                 logger.info("${player.name} requested one-time stats: ${packet.stats}")
@@ -348,5 +394,21 @@ class VenusPlugin :
         serverSig: ByteArray,
     ) {
         sendAuthChallenge(player, challenge, serverSig)
+    }
+
+    private fun scheduleAuthChallengeTimeout(player: Player) {
+        val uuid = player.uniqueId
+        sessionTimeoutTasks[uuid]?.cancel()
+        sessionTimeoutTasks[uuid] = server.scheduler.runTaskLater(
+            this,
+            Runnable {
+                if (SessionManager.getPending(uuid) != null) {
+                    SessionManager.removePending(uuid)
+                    logger.info("Auth challenge expired for ${player.name}")
+                }
+                sessionTimeoutTasks.remove(uuid)
+            },
+            (VenusConfig.sessionTimeoutSeconds * 20L),
+        )
     }
 }
