@@ -35,6 +35,36 @@ class PacketsTest {
     }
 
     @Test
+    fun `key auth response and ready packets use typed json envelopes`() {
+        assertEquals(
+            """{"type":"server_key","public_key":"server-public"}""",
+            json.encodeToString(ServerKeyPacket(type = "server_key", publicKey = "server-public")),
+        )
+        assertEquals(
+            """{"type":"client_key","public_key":"client-public"}""",
+            json.encodeToString(ClientKeyPacket(type = "client_key", publicKey = "client-public")),
+        )
+        assertEquals(
+            """{"type":"auth_response","challenge":"nonce","client_sig":"signature"}""",
+            json.encodeToString(
+                AuthResponsePacket(type = "auth_response", challenge = "nonce", clientSignature = "signature"),
+            ),
+        )
+        assertEquals(
+            """{"type":"ready"}""",
+            json.encodeToString(ReadyPacket(type = "ready")),
+        )
+    }
+
+    @Test
+    fun `console command sends command in typed json envelope`() {
+        assertEquals(
+            """{"type":"console_cmd","command":"say hi"}""",
+            json.encodeToString(ConsoleCmdPacket(type = "console_cmd", command = "say hi")),
+        )
+    }
+
+    @Test
     fun `stats response omits fields not requested`() {
         val encoded = json.encodeToString(StatsPacket(type = "stats", tps = 19.8, ramUsed = 412, ramMax = 1024))
 

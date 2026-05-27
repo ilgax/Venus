@@ -12,8 +12,12 @@ public record VenusRawReadyPayload(byte[] bytes) implements CustomPacketPayload 
     public static final Type<VenusRawReadyPayload> TYPE = new Type<>(ID);
     @SuppressWarnings("unused")
     public static final StreamCodec<RegistryFriendlyByteBuf, VenusRawReadyPayload> CODEC = StreamCodec.of(
-            (buf, payload) -> {},
-            buf -> new VenusRawReadyPayload(new byte[0])
+            (buf, payload) -> buf.writeBytes(payload.bytes()),
+            buf -> {
+                byte[] bytes = new byte[buf.readableBytes()];
+                buf.readBytes(bytes);
+                return new VenusRawReadyPayload(bytes);
+            }
     );
 
     @Override

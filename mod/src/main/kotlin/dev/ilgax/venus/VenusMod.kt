@@ -7,6 +7,14 @@ import dev.ilgax.venus.network.VenusRawAuthPayload
 import dev.ilgax.venus.network.VenusRawDataPayload
 import dev.ilgax.venus.network.VenusRawPayload
 import dev.ilgax.venus.network.VenusRawReadyPayload
+import dev.ilgax.venus.protocol.AuthChallengePacket
+import dev.ilgax.venus.protocol.AuthResponsePacket
+import dev.ilgax.venus.protocol.ClientKeyPacket
+import dev.ilgax.venus.protocol.ConsoleCmdPacket
+import dev.ilgax.venus.protocol.ErrorPacket
+import dev.ilgax.venus.protocol.ReadyPacket
+import dev.ilgax.venus.protocol.ServerKeyPacket
+import kotlinx.serialization.json.Json
 import net.fabricmc.api.ClientModInitializer
 import net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents
@@ -26,6 +34,8 @@ class VenusMod : ClientModInitializer {
         var sessionActive = false
     }
 
+    private val json = Json { ignoreUnknownKeys = true }
+
     data object HelloPayload : CustomPacketPayload {
         val TYPE =
             CustomPacketPayload.Type<HelloPayload>(
@@ -38,7 +48,7 @@ class VenusMod : ClientModInitializer {
     }
 
     data class ClientKeyPayload(
-        val keyBase64: String,
+        val data: String,
     ) : CustomPacketPayload {
         companion object {
             val TYPE =
@@ -47,7 +57,7 @@ class VenusMod : ClientModInitializer {
                 )
             val CODEC: StreamCodec<FriendlyByteBuf, ClientKeyPayload> =
                 StreamCodec.of(
-                    { buf, payload -> buf.writeBytes(payload.keyBase64.toByteArray(Charsets.UTF_8)) },
+                    { buf, payload -> buf.writeBytes(payload.data.toByteArray(Charsets.UTF_8)) },
                     { buf ->
                         val bytes = ByteArray(buf.readableBytes())
                         buf.readBytes(bytes)
@@ -60,7 +70,7 @@ class VenusMod : ClientModInitializer {
     }
 
     data class AuthResponsePayload(
-        val response: String,
+        val data: String,
     ) : CustomPacketPayload {
         companion object {
             val TYPE =
@@ -69,7 +79,7 @@ class VenusMod : ClientModInitializer {
                 )
             val CODEC: StreamCodec<FriendlyByteBuf, AuthResponsePayload> =
                 StreamCodec.of(
-                    { buf, payload -> buf.writeBytes(payload.response.toByteArray(Charsets.UTF_8)) },
+                    { buf, payload -> buf.writeBytes(payload.data.toByteArray(Charsets.UTF_8)) },
                     { buf ->
                         val bytes = ByteArray(buf.readableBytes())
                         buf.readBytes(bytes)
@@ -82,7 +92,7 @@ class VenusMod : ClientModInitializer {
     }
 
     data class ErrorPayload(
-        val reason: String,
+        val data: String,
     ) : CustomPacketPayload {
         companion object {
             val TYPE =
@@ -91,7 +101,7 @@ class VenusMod : ClientModInitializer {
                 )
             val CODEC: StreamCodec<FriendlyByteBuf, ErrorPayload> =
                 StreamCodec.of(
-                    { buf, payload -> buf.writeBytes(payload.reason.toByteArray(Charsets.UTF_8)) },
+                    { buf, payload -> buf.writeBytes(payload.data.toByteArray(Charsets.UTF_8)) },
                     { buf ->
                         val bytes = ByteArray(buf.readableBytes())
                         buf.readBytes(bytes)
@@ -145,7 +155,17 @@ class VenusMod : ClientModInitializer {
         PayloadTypeRegistry.playS2C().register(VenusRawDataPayload.TYPE, VenusRawDataPayload.CODEC)
 
         ClientPlayNetworking.registerGlobalReceiver(VenusRawPayload.TYPE) { payload, _ ->
-            val serverKeyBase64 = payload.bytes().toString(Charsets.UTF_8)
+            val packet = try {
+                json.decodeFromString(ServerKeyPacket.serializer(), payload.bytes().toString(Charsets.UTF_8))
+            } catch (e: Exception) {
+                println("Venus: invalid server key packet - ${e.message}")
+                return@registerGlobalReceiver
+            }
+            if (packet.type != "server_key") {
+                println("Venus: unexpected server key packet type: ${packet.type}")
+                return@registerGlobalReceiver
+            }
+            val serverKeyBase64 = packet.publicKey
             println("Received server public key: $serverKeyBase64")
 
             val (host, port) =
@@ -161,27 +181,44 @@ class VenusMod : ClientModInitializer {
                 ServerKeyStore.storeKey(host, port, serverKeyBase64)
             } else if (storedKey != serverKeyBase64) {
                 println("Venus: WARNING - server key mismatch for $host:$port! Possible MITM. Aborting.")
-                ClientPlayNetworking.send(ErrorPayload("mitm_key_mismatch"))
+                sendError("mitm_key_mismatch")
                 return@registerGlobalReceiver
             } else {
                 println("Venus: server key verified for $host:$port")
             }
 
-            ClientPlayNetworking.send(ClientKeyPayload(keyManager.publicKeyBase64))
+            val keyPacket =
+                json.encodeToString(
+                    ClientKeyPacket.serializer(),
+                    ClientKeyPacket(type = "client_key", publicKey = keyManager.publicKeyBase64),
+                )
+            ClientPlayNetworking.send(ClientKeyPayload(keyPacket))
         }
 
         ClientPlayNetworking.registerGlobalReceiver(VenusRawAuthPayload.TYPE) { payload, _ ->
-            val data = payload.bytes().toString(Charsets.UTF_8)
-            val parts = data.split(".")
-            if (parts.size != 2) {
-                println("Venus: invalid auth challenge format")
+            val packet = try {
+                json.decodeFromString(AuthChallengePacket.serializer(), payload.bytes().toString(Charsets.UTF_8))
+            } catch (e: Exception) {
+                println("Venus: invalid auth challenge packet - ${e.message}")
                 return@registerGlobalReceiver
             }
-
-            val challengeB64 = parts[0]
-            val serverSigB64 = parts[1]
-            val challenge = Base64.getDecoder().decode(challengeB64)
-            val serverSig = Base64.getDecoder().decode(serverSigB64)
+            if (packet.type != "auth_challenge") {
+                println("Venus: unexpected auth challenge packet type: ${packet.type}")
+                return@registerGlobalReceiver
+            }
+            val challengeB64 = packet.challenge
+            val challenge = try {
+                Base64.getDecoder().decode(challengeB64)
+            } catch (_: IllegalArgumentException) {
+                println("Venus: invalid Base64 in auth challenge")
+                return@registerGlobalReceiver
+            }
+            val serverSig = try {
+                Base64.getDecoder().decode(packet.serverSignature)
+            } catch (_: IllegalArgumentException) {
+                println("Venus: invalid Base64 in auth signature")
+                return@registerGlobalReceiver
+            }
 
             val (host, port) =
                 getServerAddress() ?: run {
@@ -198,17 +235,35 @@ class VenusMod : ClientModInitializer {
             val serverPublicKey = Handshake.decodePublicKey(storedKeyB64)
             if (!Handshake.verify(challenge, serverSig, serverPublicKey)) {
                 println("Venus: WARNING - server signature verification failed! Possible MITM. Aborting.")
-                ClientPlayNetworking.send(ErrorPayload("mitm_sig_fail"))
+                sendError("mitm_sig_fail")
                 return@registerGlobalReceiver
             }
 
             val clientSig = Handshake.sign(challenge, keyManager.privateKey)
-            val response = "$challengeB64.${Base64.getEncoder().encodeToString(clientSig)}"
+            val response =
+                json.encodeToString(
+                    AuthResponsePacket.serializer(),
+                    AuthResponsePacket(
+                        type = "auth_response",
+                        challenge = challengeB64,
+                        clientSignature = Base64.getEncoder().encodeToString(clientSig),
+                    ),
+                )
             ClientPlayNetworking.send(AuthResponsePayload(response))
             println("Venus: sent auth response")
         }
 
-        ClientPlayNetworking.registerGlobalReceiver(VenusRawReadyPayload.TYPE) { _, _ ->
+        ClientPlayNetworking.registerGlobalReceiver(VenusRawReadyPayload.TYPE) { payload, _ ->
+            val packet = try {
+                json.decodeFromString(ReadyPacket.serializer(), payload.bytes().toString(Charsets.UTF_8))
+            } catch (e: Exception) {
+                println("Venus: invalid ready packet - ${e.message}")
+                return@registerGlobalReceiver
+            }
+            if (packet.type != "ready") {
+                println("Venus: unexpected ready packet type: ${packet.type}")
+                return@registerGlobalReceiver
+            }
             println("Venus: session active!")
             sessionActive = true
             ClientPlayNetworking.send(
@@ -230,7 +285,12 @@ class VenusMod : ClientModInitializer {
         ClientSendMessageEvents.ALLOW_CHAT.register { message ->
             if (sessionActive && message.startsWith("$")) {
                 val command = message.removePrefix("$").trim()
-                ClientPlayNetworking.send(CmdPayload(command))
+                val packet =
+                    json.encodeToString(
+                        ConsoleCmdPacket.serializer(),
+                        ConsoleCmdPacket(type = "console_cmd", command = command),
+                    )
+                ClientPlayNetworking.send(CmdPayload(packet))
                 false
             } else {
                 true
@@ -240,6 +300,15 @@ class VenusMod : ClientModInitializer {
         ClientPlayConnectionEvents.DISCONNECT.register { _, _ ->
             sessionActive = false
         }
+    }
+
+    private fun sendError(reason: String) {
+        val data =
+            json.encodeToString(
+                ErrorPacket.serializer(),
+                ErrorPacket(type = "error", reason = reason),
+            )
+        ClientPlayNetworking.send(ErrorPayload(data))
     }
 
     private fun getServerAddress(): Pair<String, Int>? {

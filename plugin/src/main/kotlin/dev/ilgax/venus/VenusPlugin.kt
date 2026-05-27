@@ -8,10 +8,17 @@ import dev.ilgax.venus.auth.PendingSession
 import dev.ilgax.venus.auth.SessionManager
 import dev.ilgax.venus.commands.VenusCommand
 import dev.ilgax.venus.config.VenusConfig
+import dev.ilgax.venus.protocol.AuthChallengePacket
+import dev.ilgax.venus.protocol.AuthResponsePacket
+import dev.ilgax.venus.protocol.ClientKeyPacket
 import dev.ilgax.venus.protocol.CmdResponsePacket
 import dev.ilgax.venus.protocol.ConsoleCmdPacket
+import dev.ilgax.venus.protocol.ErrorPacket
+import dev.ilgax.venus.protocol.ReadyPacket
+import dev.ilgax.venus.protocol.ServerKeyPacket
 import dev.ilgax.venus.protocol.StatGetPacket
 import dev.ilgax.venus.protocol.StatSubscribePacket
+import dev.ilgax.venus.protocol.VenusChannels
 import dev.ilgax.venus.stats.StatSubscriptionManager
 import dev.ilgax.venus.stats.StatsCollector
 import kotlinx.serialization.SerializationException
@@ -54,11 +61,11 @@ class VenusPlugin :
         registerCommand("venus", VenusCommand(this))
         server.pluginManager.registerEvents(this, this)
 
-        server.messenger.registerIncomingPluginChannel(this, "venus:hello", this)
-        server.messenger.registerIncomingPluginChannel(this, "venus:key", this)
-        server.messenger.registerIncomingPluginChannel(this, "venus:auth", this)
-        server.messenger.registerIncomingPluginChannel(this, "venus:error", this)
-        server.messenger.registerIncomingPluginChannel(this, "venus:cmd", this)
+        server.messenger.registerIncomingPluginChannel(this, VenusChannels.HELLO, this)
+        server.messenger.registerIncomingPluginChannel(this, VenusChannels.KEY, this)
+        server.messenger.registerIncomingPluginChannel(this, VenusChannels.AUTH, this)
+        server.messenger.registerIncomingPluginChannel(this, VenusChannels.ERROR, this)
+        server.messenger.registerIncomingPluginChannel(this, VenusChannels.CMD, this)
     }
 
     override fun onDisable() {
@@ -67,11 +74,11 @@ class VenusPlugin :
         sessionTimeoutTasks.clear()
         StatSubscriptionManager.cancelAll()
         SessionManager.clearAll()
-        server.messenger.unregisterIncomingPluginChannel(this, "venus:hello")
-        server.messenger.unregisterIncomingPluginChannel(this, "venus:key")
-        server.messenger.unregisterIncomingPluginChannel(this, "venus:auth")
-        server.messenger.unregisterIncomingPluginChannel(this, "venus:error")
-        server.messenger.unregisterIncomingPluginChannel(this, "venus:cmd")
+        server.messenger.unregisterIncomingPluginChannel(this, VenusChannels.HELLO)
+        server.messenger.unregisterIncomingPluginChannel(this, VenusChannels.KEY)
+        server.messenger.unregisterIncomingPluginChannel(this, VenusChannels.AUTH)
+        server.messenger.unregisterIncomingPluginChannel(this, VenusChannels.ERROR)
+        server.messenger.unregisterIncomingPluginChannel(this, VenusChannels.CMD)
     }
 
     override fun onPluginMessageReceived(
@@ -80,24 +87,32 @@ class VenusPlugin :
         message: ByteArray,
     ) {
         when (channel) {
-            "venus:hello" -> {
+            VenusChannels.HELLO -> {
                 sessionTimeoutTasks.remove(player.uniqueId)?.cancel()
                 logger.info("Venus mod detected: ${player.name}")
                 sendServerPublicKey(player)
             }
 
-            "venus:key" -> {
-                val clientPublicKeyBase64 = message.toString(Charsets.UTF_8)
-                handleClientKey(player, clientPublicKeyBase64)
+            VenusChannels.KEY -> {
+                handleClientKey(player, message.toString(Charsets.UTF_8))
             }
 
-            "venus:auth" -> {
-                val response = message.toString(Charsets.UTF_8)
-                handleAuthResponse(player, response)
+            VenusChannels.AUTH -> {
+                handleAuthResponse(player, message.toString(Charsets.UTF_8))
             }
 
-            "venus:error" -> {
-                when (val reason = message.toString(Charsets.UTF_8)) {
+            VenusChannels.ERROR -> {
+                val packet = try {
+                    json.decodeFromString<ErrorPacket>(message.toString(Charsets.UTF_8))
+                } catch (e: SerializationException) {
+                    logger.warning("${player.name} sent malformed error packet: ${e.message}")
+                    return
+                }
+                if (packet.type != "error") {
+                    logger.warning("${player.name} sent invalid error packet type: ${packet.type}")
+                    return
+                }
+                when (val reason = packet.reason) {
                     "mitm_key_mismatch" -> {
                         logger.warning(
                             "${player.name} rejected connection - server key mismatch on client side (possible MITM)",
@@ -116,7 +131,7 @@ class VenusPlugin :
                 }
             }
 
-            "venus:cmd" -> {
+            VenusChannels.CMD -> {
                 val data = message.toString(Charsets.UTF_8)
                 handleCmdPacket(player, data)
             }
@@ -145,7 +160,12 @@ class VenusPlugin :
     }
 
     private fun sendServerPublicKey(player: Player) {
-        val keyBytes = keyManager.publicKeyBase64.toByteArray(Charsets.UTF_8)
+        val data =
+            json.encodeToString(
+                ServerKeyPacket.serializer(),
+                ServerKeyPacket(type = "server_key", publicKey = keyManager.publicKeyBase64),
+            )
+        val keyBytes = data.toByteArray(Charsets.UTF_8)
         val id = Identifier.fromNamespaceAndPath("venus", "key")
         val payload = DiscardedPayload(id, keyBytes)
         val packet = ClientboundCustomPayloadPacket(payload)
@@ -155,8 +175,19 @@ class VenusPlugin :
 
     private fun handleClientKey(
         player: Player,
-        clientPublicKeyBase64: String,
+        data: String,
     ) {
+        val packet = try {
+            json.decodeFromString<ClientKeyPacket>(data)
+        } catch (e: SerializationException) {
+            logger.warning("Malformed client key packet from ${player.name}: ${e.message}")
+            return
+        }
+        if (packet.type != "client_key") {
+            logger.warning("Invalid client key packet type from ${player.name}: ${packet.type}")
+            return
+        }
+        val clientPublicKeyBase64 = packet.publicKey
         if (clientPublicKeyBase64.isBlank()) {
             logger.warning("Empty client key from ${player.name}")
             return
@@ -227,7 +258,11 @@ class VenusPlugin :
     ) {
         val challengeB64 = Base64.getEncoder().encodeToString(challenge)
         val sigB64 = Base64.getEncoder().encodeToString(serverSig)
-        val payload = "$challengeB64.$sigB64".toByteArray(Charsets.UTF_8)
+        val payload =
+            json.encodeToString(
+                AuthChallengePacket.serializer(),
+                AuthChallengePacket(type = "auth_challenge", challenge = challengeB64, serverSignature = sigB64),
+            ).toByteArray(Charsets.UTF_8)
         val id = Identifier.fromNamespaceAndPath("venus", "auth")
         val packet = ClientboundCustomPayloadPacket(DiscardedPayload(id, payload))
         (player as CraftPlayer).handle.connection.send(packet)
@@ -235,16 +270,20 @@ class VenusPlugin :
 
     private fun handleAuthResponse(
         player: Player,
-        response: String,
+        data: String,
     ) {
-        val parts = response.split(".")
-        if (parts.size != 2) {
-            logger.warning("Invalid auth response format from ${player.name}")
+        val packet = try {
+            json.decodeFromString<AuthResponsePacket>(data)
+        } catch (e: SerializationException) {
+            logger.warning("Malformed auth response packet from ${player.name}: ${e.message}")
             return
         }
-
-        val challengeB64 = parts[0]
-        val clientSigB64 = parts[1]
+        if (packet.type != "auth_response") {
+            logger.warning("Invalid auth response packet type from ${player.name}: ${packet.type}")
+            return
+        }
+        val challengeB64 = packet.challenge
+        val clientSigB64 = packet.clientSignature
 
         val pending = SessionManager.getPending(player.uniqueId)
         if (pending == null) {
@@ -382,8 +421,13 @@ class VenusPlugin :
     }
 
     fun sendReady(player: Player) {
+        val data =
+            json.encodeToString(
+                ReadyPacket.serializer(),
+                ReadyPacket(type = "ready"),
+            )
         val id = Identifier.fromNamespaceAndPath("venus", "ready")
-        val packet = ClientboundCustomPayloadPacket(DiscardedPayload(id, ByteArray(0)))
+        val packet = ClientboundCustomPayloadPacket(DiscardedPayload(id, data.toByteArray(Charsets.UTF_8)))
         (player as CraftPlayer).handle.connection.send(packet)
         logger.info("Sent venus:ready to ${player.name}")
     }

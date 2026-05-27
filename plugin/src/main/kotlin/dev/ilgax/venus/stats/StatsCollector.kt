@@ -1,6 +1,8 @@
 package dev.ilgax.venus.stats
 
 import dev.ilgax.venus.protocol.StatsPacket
+import java.math.BigDecimal
+import java.math.RoundingMode
 import kotlinx.serialization.json.Json
 import org.bukkit.Server
 
@@ -20,6 +22,12 @@ object StatsCollector {
             .getRuntimeMXBean()
             .uptime / 1000
 
+    internal fun roundToOneDecimal(value: Double): Double =
+        BigDecimal
+            .valueOf(value)
+            .setScale(1, RoundingMode.HALF_UP)
+            .toDouble()
+
     fun buildStatsJson(
         server: Server,
         requestedStats: List<String>,
@@ -27,8 +35,8 @@ object StatsCollector {
         val packet =
             StatsPacket(
                 type = "stats",
-                tps = if ("tps" in requestedStats) getTPS(server) else null,
-                mspt = if ("mspt" in requestedStats) getMSPT(server) else null,
+                tps = if ("tps" in requestedStats) roundToOneDecimal(getTPS(server)) else null,
+                mspt = if ("mspt" in requestedStats) roundToOneDecimal(getMSPT(server)) else null,
                 ramUsed = if ("ram" in requestedStats) getRamUsed() else null,
                 ramMax = if ("ram" in requestedStats) getRamMax() else null,
                 uptime = if ("uptime" in requestedStats) getUptime() else null,
