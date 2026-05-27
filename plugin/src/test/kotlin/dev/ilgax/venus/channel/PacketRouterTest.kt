@@ -26,7 +26,10 @@ class PacketRouterTest {
         val router = PacketRouter(plugin, kotlinx.serialization.json.Json { ignoreUnknownKeys = true }, consoleHandler, statsHandler)
 
         io.mockk.mockkObject(dev.ilgax.venus.auth.SessionManager)
-        io.mockk.every { dev.ilgax.venus.auth.SessionManager.isActive(any()) } returns false
+        io.mockk.every {
+            dev.ilgax.venus.auth.SessionManager
+                .isActive(any())
+        } returns false
 
         router.handleCommand(player, """{"type":"console_cmd"}""")
         io.mockk.verify(exactly = 0) { consoleHandler.handle(any(), any()) }
@@ -43,7 +46,10 @@ class PacketRouterTest {
         val router = PacketRouter(plugin, kotlinx.serialization.json.Json { ignoreUnknownKeys = true }, consoleHandler, statsHandler)
 
         io.mockk.mockkObject(dev.ilgax.venus.auth.SessionManager)
-        io.mockk.every { dev.ilgax.venus.auth.SessionManager.isActive(any()) } returns true
+        io.mockk.every {
+            dev.ilgax.venus.auth.SessionManager
+                .isActive(any())
+        } returns true
 
         router.handleCommand(player, """{invalid}""")
         io.mockk.verify(exactly = 0) { consoleHandler.handle(any(), any()) }
@@ -60,7 +66,10 @@ class PacketRouterTest {
         val router = PacketRouter(plugin, kotlinx.serialization.json.Json { ignoreUnknownKeys = true }, consoleHandler, statsHandler)
 
         io.mockk.mockkObject(dev.ilgax.venus.auth.SessionManager)
-        io.mockk.every { dev.ilgax.venus.auth.SessionManager.isActive(any()) } returns true
+        io.mockk.every {
+            dev.ilgax.venus.auth.SessionManager
+                .isActive(any())
+        } returns true
 
         val data = """{"type":"console_cmd"}"""
         router.handleCommand(player, data)

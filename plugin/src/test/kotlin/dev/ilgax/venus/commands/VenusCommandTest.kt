@@ -37,12 +37,12 @@ class VenusCommandTest {
         stack = mockk(relaxed = true)
         consoleSender = mockk(relaxed = true)
         playerSender = mockk(relaxed = true)
-        
+
         every { plugin.server } returns server
         every { plugin.logger } returns Logger.getAnonymousLogger()
         every { consoleSender.sendMessage(any<String>()) } returns Unit
         every { playerSender.sendMessage(any<String>()) } returns Unit
-        
+
         command = VenusCommand(plugin, authHandler)
 
         mockkObject(SessionManager)
@@ -65,7 +65,7 @@ class VenusCommandTest {
     @Test
     fun `allow and deny from non-console shows error`() {
         every { stack.sender } returns playerSender
-        
+
         command.execute(stack, arrayOf("allow"))
         verify { playerSender.sendMessage("This command can only be run from the console.") }
 
@@ -168,7 +168,7 @@ class VenusCommandTest {
         val approval = mockk<dev.ilgax.venus.auth.PendingApproval>()
         val mockPlayer = mockk<Player>()
         val pubKeyBytes = mockk<java.security.PublicKey>()
-        
+
         every { stack.sender } returns consoleSender
         every { SessionManager.getNextPendingApproval() } returns java.util.AbstractMap.SimpleEntry(uuid, approval)
         every { server.getPlayer(uuid) } returns mockPlayer

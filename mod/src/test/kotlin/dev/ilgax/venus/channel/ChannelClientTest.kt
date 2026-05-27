@@ -6,12 +6,11 @@ import org.junit.Test
 import kotlin.test.assertEquals
 
 class ChannelClientTest {
-
     @Test
     fun `HelloPayload codec works`() {
         val payload = ChannelClient.HelloPayload
         assertEquals("venus:hello", payload.type().id().toString())
-        
+
         val buf = FriendlyByteBuf(Unpooled.buffer())
         ChannelClient.HelloPayload.CODEC.encode(buf, payload)
         val decoded = ChannelClient.HelloPayload.CODEC.decode(buf)

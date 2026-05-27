@@ -18,7 +18,6 @@ import java.io.File
 import java.util.logging.Logger
 
 class VenusPluginTest {
-
     private lateinit var plugin: VenusPlugin
     private lateinit var server: Server
     private lateinit var pluginManager: PluginManager

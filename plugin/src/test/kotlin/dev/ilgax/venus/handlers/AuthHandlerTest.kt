@@ -1,10 +1,24 @@
 package dev.ilgax.venus.handlers
 
-import dev.ilgax.venus.auth.*
+import dev.ilgax.venus.auth.AuthorizedKeys
+import dev.ilgax.venus.auth.Handshake
+import dev.ilgax.venus.auth.KeyManager
+import dev.ilgax.venus.auth.PendingSession
+import dev.ilgax.venus.auth.SessionManager
 import dev.ilgax.venus.config.VenusConfig
-import dev.ilgax.venus.protocol.*
+import dev.ilgax.venus.protocol.AuthChallengePacket
+import dev.ilgax.venus.protocol.AuthResponsePacket
+import dev.ilgax.venus.protocol.ClientKeyPacket
+import dev.ilgax.venus.protocol.ErrorPacket
+import dev.ilgax.venus.protocol.ServerKeyPacket
 import dev.ilgax.venus.stats.StatSubscriptionManager
-import io.mockk.*
+import io.mockk.Runs
+import io.mockk.every
+import io.mockk.just
+import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkAll
+import io.mockk.verify
 import kotlinx.serialization.json.Json
 import org.bukkit.Server
 import org.bukkit.entity.Player
@@ -15,12 +29,12 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import java.security.KeyPair
-import java.util.*
+import java.util.Base64
+import java.util.UUID
 import java.util.logging.Logger
 import kotlin.test.assertEquals
 
 class AuthHandlerTest {
-
     private lateinit var plugin: JavaPlugin
     private lateinit var server: Server
     private lateinit var scheduler: BukkitScheduler
@@ -54,11 +68,17 @@ class AuthHandlerTest {
         every { player.name } returns playerName
         every { server.onlineMode } returns true
 
-        val serverKeyPair = java.security.KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
+        val serverKeyPair =
+            java.security.KeyPairGenerator
+                .getInstance("Ed25519")
+                .generateKeyPair()
         every { keyManager.publicKeyBase64 } returns Base64.getEncoder().encodeToString(serverKeyPair.public.encoded)
         every { keyManager.privateKey } returns serverKeyPair.private
 
-        clientKeyPair = java.security.KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
+        clientKeyPair =
+            java.security.KeyPairGenerator
+                .getInstance("Ed25519")
+                .generateKeyPair()
 
         sendKeyCalls = mutableListOf()
         sendAuthCalls = mutableListOf()
@@ -83,14 +103,15 @@ class AuthHandlerTest {
         every { SessionManager.getCachedKey(any()) } returns null
         every { StatSubscriptionManager.cancel(any()) } just Runs
 
-        handler = AuthHandler(
-            plugin,
-            json,
-            keyManager,
-            { _, data -> sendKeyCalls.add(data) },
-            { _, data -> sendAuthCalls.add(data) },
-            { _, data -> sendReadyCalls.add(data) }
-        )
+        handler =
+            AuthHandler(
+                plugin,
+                json,
+                keyManager,
+                { _, data -> sendKeyCalls.add(data) },
+                { _, data -> sendAuthCalls.add(data) },
+                { _, data -> sendReadyCalls.add(data) },
+            )
     }
 
     @After
@@ -101,7 +122,7 @@ class AuthHandlerTest {
     @Test
     fun `handleHello sends server key`() {
         handler.handleHello(player)
-        
+
         assertEquals(1, sendKeyCalls.size)
         val packet = json.decodeFromString<ServerKeyPacket>(sendKeyCalls[0])
         assertEquals("server_key", packet.type)
@@ -150,11 +171,12 @@ class AuthHandlerTest {
         every { SessionManager.activate(uuid, any()) } just Runs
 
         val clientSigBytes = Handshake.sign(challengeBytes, clientKeyPair.private)
-        val packet = AuthResponsePacket(
-            type = "auth_response",
-            challenge = Base64.getEncoder().encodeToString(challengeBytes),
-            clientSignature = Base64.getEncoder().encodeToString(clientSigBytes)
-        )
+        val packet =
+            AuthResponsePacket(
+                type = "auth_response",
+                challenge = Base64.getEncoder().encodeToString(challengeBytes),
+                clientSignature = Base64.getEncoder().encodeToString(clientSigBytes),
+            )
         val data = Json.encodeToString(AuthResponsePacket.serializer(), packet)
 
         handler.handleAuthResponse(player, data)

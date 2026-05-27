@@ -18,7 +18,6 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 class StatsHandlerTest {
-
     @BeforeTest
     fun setup() {
         mockkObject(StatSubscriptionManager)
@@ -61,7 +60,7 @@ class StatsHandlerTest {
 
         val handler = StatsHandler(plugin, json, sendData)
         val packetJson = """{"type":"stat_subscribe","stats":["tps"],"intervalSeconds":5}"""
-        
+
         handler.handleSubscribe(player, packetJson)
 
         verify { StatSubscriptionManager.subscribe(any(), any(), any(), any(), any()) }

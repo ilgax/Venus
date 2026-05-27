@@ -10,12 +10,11 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class VenusConfigTest {
-
     @Test
     fun `load correctly applies defaults when config is empty`() {
         val plugin = mockk<JavaPlugin>(relaxed = true)
         val config = mockk<FileConfiguration>(relaxed = true)
-        
+
         every { plugin.config } returns config
         every { plugin.logger } returns Logger.getAnonymousLogger()
         every { config.getInt("max_users", any()) } returns 1

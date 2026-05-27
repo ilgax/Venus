@@ -43,13 +43,13 @@ class ConsoleHandlerTest {
         every { plugin.server } returns server
         every { plugin.logger } returns Logger.getAnonymousLogger()
         every { player.name } returns "TestPlayer"
-        
+
         // Mock the createCommandSender behavior
         every { server.createCommandSender(any()) } returns sender
         every { server.dispatchCommand(sender, "say hello") } returns true
 
         val handler = ConsoleHandler(plugin, json, sendData)
-        
+
         val packetJson = """{"type":"console_cmd","command":"say hello"}"""
         handler.handle(player, packetJson)
 

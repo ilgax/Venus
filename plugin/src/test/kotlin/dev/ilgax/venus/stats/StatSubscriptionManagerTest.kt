@@ -12,7 +12,6 @@ import org.junit.Test
 import java.util.UUID
 
 class StatSubscriptionManagerTest {
-
     private lateinit var plugin: Plugin
     private lateinit var server: Server
     private lateinit var scheduler: BukkitScheduler
