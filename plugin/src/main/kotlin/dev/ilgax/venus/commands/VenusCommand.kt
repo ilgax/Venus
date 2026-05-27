@@ -2,16 +2,16 @@ package dev.ilgax.venus.commands
 
 import dev.ilgax.venus.VenusPlugin
 import dev.ilgax.venus.auth.AuthorizedKeys
-import dev.ilgax.venus.auth.Handshake
-import dev.ilgax.venus.auth.PendingSession
 import dev.ilgax.venus.auth.SessionManager
 import dev.ilgax.venus.config.VenusConfig
+import dev.ilgax.venus.handlers.AuthHandler
 import io.papermc.paper.command.brigadier.BasicCommand
 import io.papermc.paper.command.brigadier.CommandSourceStack
 import org.bukkit.command.ConsoleCommandSender
 
 class VenusCommand(
     private val plugin: VenusPlugin,
+    private val authHandler: AuthHandler,
 ) : BasicCommand {
     override fun execute(
         stack: CommandSourceStack,
@@ -67,10 +67,7 @@ class VenusCommand(
         }
         AuthorizedKeys.authorize(approval.clientPublicKeyBase64, player.name)
         SessionManager.removePendingApproval(uuid)
-        val challenge = Handshake.generateChallenge()
-        val serverSig = Handshake.sign(challenge, plugin.keyManager.privateKey)
-        SessionManager.addPending(uuid, PendingSession(approval.clientPublicKey, challenge))
-        plugin.sendAuthChallengeTo(player, challenge, serverSig)
+        authHandler.startApprovedChallenge(player, approval.clientPublicKey)
         sender.sendMessage("${player.name} authorized.")
         plugin.logger.info("${player.name} authorized via console.")
     }
