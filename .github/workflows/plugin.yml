@@ -4,6 +4,7 @@ on:
   push:
     branches: [master]
     paths:
+      - 'common/**'
       - 'plugin/**'
       - 'gradle/**'
       - 'build.gradle.kts'
