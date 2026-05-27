@@ -114,6 +114,15 @@ class SessionManagerTest {
     }
 
     @Test
+    fun `disconnected session cannot authorize a reconnect before new authentication`() {
+        SessionManager.activate(uuid, keyPair.public)
+
+        SessionManager.deactivate(uuid)
+
+        assertFalse(SessionManager.isActive(uuid))
+    }
+
+    @Test
     fun `deactivate removes all three associations`() {
         val challenge = ByteArray(32) { 7 }
         val b64 =

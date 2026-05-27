@@ -112,7 +112,7 @@ class AuthHandler(
                         plugin.logger.info("Venus request from ${player.name} timed out.")
                     }
                 },
-                (VenusConfig.sessionTimeoutSeconds * 20L),
+                (VenusConfig.authTimeoutSeconds * 20L),
             )
         }
     }
@@ -233,21 +233,10 @@ class AuthHandler(
         val uuid = player.uniqueId
         if (!SessionManager.isActive(uuid)) return
 
-        plugin.logger.info("${player.name} disconnected - starting ${VenusConfig.sessionTimeoutSeconds}s Venus session timeout")
-
-        val task =
-            plugin.server.scheduler.runTaskLater(
-                plugin,
-                Runnable {
-                    if (!SessionManager.isActive(uuid)) return@Runnable
-                    SessionManager.deactivate(uuid)
-                    StatSubscriptionManager.cancel(uuid)
-                    sessionTimeoutTasks.remove(uuid)
-                    plugin.logger.info("Venus session expired for ${player.name}")
-                },
-                (VenusConfig.sessionTimeoutSeconds * 20L),
-            )
-        sessionTimeoutTasks[uuid] = task
+        sessionTimeoutTasks.remove(uuid)?.cancel()
+        SessionManager.deactivate(uuid)
+        StatSubscriptionManager.cancel(uuid)
+        plugin.logger.info("${player.name} disconnected - Venus session deactivated; re-authentication required on reconnect")
     }
 
     fun cancelAllTimeouts() {
@@ -289,7 +278,7 @@ class AuthHandler(
                     }
                     sessionTimeoutTasks.remove(uuid)
                 },
-                (VenusConfig.sessionTimeoutSeconds * 20L),
+                (VenusConfig.authTimeoutSeconds * 20L),
             )
     }
 }

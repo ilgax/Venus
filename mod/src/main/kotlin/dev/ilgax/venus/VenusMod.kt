@@ -3,6 +3,7 @@ package dev.ilgax.venus
 import dev.ilgax.venus.auth.Handshake
 import dev.ilgax.venus.auth.KeyManager
 import dev.ilgax.venus.auth.ServerKeyStore
+import dev.ilgax.venus.channel.PacketHandler
 import dev.ilgax.venus.network.VenusRawAuthPayload
 import dev.ilgax.venus.network.VenusRawDataPayload
 import dev.ilgax.venus.network.VenusRawPayload
@@ -12,8 +13,8 @@ import dev.ilgax.venus.protocol.AuthResponsePacket
 import dev.ilgax.venus.protocol.ClientKeyPacket
 import dev.ilgax.venus.protocol.ConsoleCmdPacket
 import dev.ilgax.venus.protocol.ErrorPacket
-import dev.ilgax.venus.protocol.ReadyPacket
 import dev.ilgax.venus.protocol.ServerKeyPacket
+import dev.ilgax.venus.state.SessionState
 import kotlinx.serialization.json.Json
 import net.fabricmc.api.ClientModInitializer
 import net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents
@@ -31,10 +32,10 @@ import java.util.Base64
 class VenusMod : ClientModInitializer {
     companion object {
         lateinit var keyManager: KeyManager
-        var sessionActive = false
     }
 
     private val json = Json { ignoreUnknownKeys = true }
+    private lateinit var packetHandler: PacketHandler
 
     data object HelloPayload : CustomPacketPayload {
         val TYPE =
@@ -143,6 +144,10 @@ class VenusMod : ClientModInitializer {
         keyManager.loadOrGenerate()
         println("Venus client keypair loaded")
         ServerKeyStore.init(venusFolder)
+        packetHandler =
+            PacketHandler(json, sendCommand = { data ->
+                ClientPlayNetworking.send(CmdPayload(data))
+            })
 
         PayloadTypeRegistry.playC2S().register(HelloPayload.TYPE, HelloPayload.CODEC)
         PayloadTypeRegistry.playC2S().register(ClientKeyPayload.TYPE, ClientKeyPayload.CODEC)
@@ -254,28 +259,12 @@ class VenusMod : ClientModInitializer {
         }
 
         ClientPlayNetworking.registerGlobalReceiver(VenusRawReadyPayload.TYPE) { payload, _ ->
-            val packet = try {
-                json.decodeFromString(ReadyPacket.serializer(), payload.bytes().toString(Charsets.UTF_8))
-            } catch (e: Exception) {
-                println("Venus: invalid ready packet - ${e.message}")
-                return@registerGlobalReceiver
-            }
-            if (packet.type != "ready") {
-                println("Venus: unexpected ready packet type: ${packet.type}")
-                return@registerGlobalReceiver
-            }
-            println("Venus: session active!")
-            sessionActive = true
-            ClientPlayNetworking.send(
-                CmdPayload("""{"type":"stat_subscribe","interval_seconds":2,"stats":["tps","ram","mspt","uptime"]}"""),
-            )
+            packetHandler.handleReady(payload.bytes().toString(Charsets.UTF_8))
             // TODO: Open gui
         }
 
         ClientPlayNetworking.registerGlobalReceiver(VenusRawDataPayload.TYPE) { payload, _ ->
-            val data = payload.bytes().toString(Charsets.UTF_8)
-            println("Venus data received: $data")
-            // TODO: parse and store in SessionState for GUI
+            packetHandler.handleData(payload.bytes().toString(Charsets.UTF_8))
         }
 
         ClientPlayConnectionEvents.JOIN.register { _, _, _ ->
@@ -283,7 +272,7 @@ class VenusMod : ClientModInitializer {
         }
 
         ClientSendMessageEvents.ALLOW_CHAT.register { message ->
-            if (sessionActive && message.startsWith("$")) {
+            if (SessionState.sessionActive && message.startsWith("$")) {
                 val command = message.removePrefix("$").trim()
                 val packet =
                     json.encodeToString(
@@ -298,7 +287,7 @@ class VenusMod : ClientModInitializer {
         }
 
         ClientPlayConnectionEvents.DISCONNECT.register { _, _ ->
-            sessionActive = false
+            SessionState.reset()
         }
     }
 

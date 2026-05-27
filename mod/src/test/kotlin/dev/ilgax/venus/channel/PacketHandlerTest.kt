@@ -1,0 +1,48 @@
+package dev.ilgax.venus.channel
+
+import dev.ilgax.venus.protocol.CmdResponsePacket
+import dev.ilgax.venus.protocol.ReadyPacket
+import dev.ilgax.venus.protocol.StatSubscribePacket
+import dev.ilgax.venus.protocol.StatsPacket
+import dev.ilgax.venus.state.SessionState
+import kotlinx.serialization.json.Json
+import kotlin.test.AfterTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+
+class PacketHandlerTest {
+    private val json = Json { ignoreUnknownKeys = true }
+
+    @AfterTest
+    fun resetState() {
+        SessionState.reset()
+    }
+
+    @Test
+    fun `ready activates session and sends shared subscription packet`() {
+        val sent = mutableListOf<String>()
+        val handler = PacketHandler(json, sent::add) {}
+
+        handler.handleReady(json.encodeToString(ReadyPacket.serializer(), ReadyPacket("ready")))
+
+        assertTrue(SessionState.sessionActive)
+        val subscription = json.decodeFromString(StatSubscribePacket.serializer(), sent.single())
+        assertEquals("stat_subscribe", subscription.type)
+        assertEquals(2, subscription.intervalSeconds)
+        assertEquals(listOf("tps", "ram", "mspt", "uptime"), subscription.stats)
+    }
+
+    @Test
+    fun `data packets update stats and command response history`() {
+        val handler = PacketHandler(json, {}) {}
+        val stats = StatsPacket(type = "stats", tps = 19.9, mspt = 23.4, uptime = 30)
+        val response = CmdResponsePacket(type = "cmd_response", command = "say hi", lines = listOf("hi"))
+
+        handler.handleData(json.encodeToString(StatsPacket.serializer(), stats))
+        handler.handleData(json.encodeToString(CmdResponsePacket.serializer(), response))
+
+        assertEquals(stats, SessionState.latestStats)
+        assertEquals(listOf(response), SessionState.commandResponses)
+    }
+}
