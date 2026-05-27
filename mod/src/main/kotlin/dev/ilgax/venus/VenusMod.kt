@@ -139,7 +139,7 @@ class VenusMod : ClientModInitializer {
         println("Venus mod loaded!")
 
         val venusFolder = File(Minecraft.getInstance().gameDirectory, "config/venus")
-        keyManager = KeyManager(venusFolder)
+        keyManager = KeyManager(venusFolder, "client_private.key", "client_public.key")
         keyManager.loadOrGenerate()
         println("Venus client keypair loaded")
         ServerKeyStore.init(venusFolder)
