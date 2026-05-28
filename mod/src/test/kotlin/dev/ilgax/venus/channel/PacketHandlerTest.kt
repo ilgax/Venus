@@ -9,6 +9,8 @@ import kotlinx.serialization.json.Json
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class PacketHandlerTest {
@@ -44,5 +46,45 @@ class PacketHandlerTest {
 
         assertEquals(stats, SessionState.latestStats)
         assertEquals(listOf(response), SessionState.commandResponses)
+    }
+
+    @Test
+    fun `invalid and unexpected ready packets do not activate session or subscribe`() {
+        val sent = mutableListOf<String>()
+        val handler = PacketHandler(json, sent::add) {}
+
+        handler.handleReady("""{"type":"stats"}""")
+        handler.handleReady("""{"type":""")
+
+        assertFalse(SessionState.sessionActive)
+        assertTrue(sent.isEmpty())
+    }
+
+    @Test
+    fun `invalid and unknown data packets do not mutate state`() {
+        val handler = PacketHandler(json, {}) {}
+        val stats = StatsPacket(type = "stats", tps = 20.0)
+        val response = CmdResponsePacket(type = "cmd_response", command = "say hi", lines = listOf("hi"))
+        SessionState.updateStats(stats)
+        SessionState.addCommandResponse(response)
+
+        handler.handleData("""{"type":"unknown","value":1}""")
+        handler.handleData("""{"type":""")
+        handler.handleData("""{"type":"stats","tps":"bad"}""")
+        handler.handleData("""{"type":"cmd_response","command":"say hi"}""")
+
+        assertEquals(stats, SessionState.latestStats)
+        assertEquals(listOf(response), SessionState.commandResponses)
+    }
+
+    @Test
+    fun `unknown data packet does not create session state`() {
+        val handler = PacketHandler(json, {}) {}
+
+        handler.handleData("""{"type":"unknown"}""")
+
+        assertFalse(SessionState.sessionActive)
+        assertNull(SessionState.latestStats)
+        assertTrue(SessionState.commandResponses.isEmpty())
     }
 }

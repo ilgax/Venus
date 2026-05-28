@@ -63,6 +63,20 @@ class ServerKeyStoreTest {
     }
 
     @Test
+    fun `host and port together define stored server identity`() {
+        ServerKeyStore.storeKey("example.com", 25565, "host_key")
+        ServerKeyStore.storeKey("example.com:25565", 25565, "address_key")
+
+        assertEquals("host_key", ServerKeyStore.getStoredKey("example.com", 25565))
+        assertEquals("address_key", ServerKeyStore.getStoredKey("example.com:25565", 25565))
+    }
+
+    @Test
+    fun `normalizeHost lowercases and removes trailing dot`() {
+        assertEquals("example.com", ServerKeyStore.normalizeHost(" Example.COM. "))
+    }
+
+    @Test
     fun `host with special characters is sanitized`() {
         val key = "some_key_value"
         ServerKeyStore.storeKey("host with spaces:8080", 25565, key)

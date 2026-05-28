@@ -10,23 +10,24 @@ import net.fabricmc.api.ClientModInitializer
 import net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents
 import net.minecraft.client.Minecraft
+import org.slf4j.LoggerFactory
 import java.io.File
 
 class VenusMod : ClientModInitializer {
     private lateinit var channelClient: ChannelClient
 
     override fun onInitializeClient() {
-        println("Venus mod loaded!")
+        LOGGER.info("Venus mod loaded")
 
         val venusFolder = File(Minecraft.getInstance().gameDirectory, "config/venus")
         val keyManager = KeyManager(venusFolder, "client_private.key", "client_public.key")
         keyManager.loadOrGenerate()
-        println("Venus client keypair loaded")
         ServerKeyStore.init(venusFolder)
 
         val json = Json { ignoreUnknownKeys = true }
-        channelClient = ChannelClient(json, keyManager)
-        val packetHandler = PacketHandler(json, channelClient::sendCommand)
+        val log: (String) -> Unit = { LOGGER.info(it) }
+        channelClient = ChannelClient(json, keyManager, log)
+        val packetHandler = PacketHandler(json, channelClient::sendCommand, log)
         channelClient.register(packetHandler)
 
         ClientPlayConnectionEvents.JOIN.register { _, _, _ ->
@@ -45,5 +46,9 @@ class VenusMod : ClientModInitializer {
         ClientPlayConnectionEvents.DISCONNECT.register { _, _ ->
             SessionState.reset()
         }
+    }
+
+    companion object {
+        private val LOGGER = LoggerFactory.getLogger("Venus")
     }
 }

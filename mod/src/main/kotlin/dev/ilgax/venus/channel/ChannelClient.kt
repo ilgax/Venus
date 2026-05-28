@@ -17,6 +17,7 @@ import kotlinx.serialization.json.Json
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry
 import net.minecraft.client.Minecraft
+import net.minecraft.client.multiplayer.resolver.ServerAddress
 import net.minecraft.network.FriendlyByteBuf
 import net.minecraft.network.codec.StreamCodec
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload
@@ -26,7 +27,7 @@ import java.util.Base64
 class ChannelClient(
     private val json: Json,
     private val keyManager: KeyManager,
-    private val log: (String) -> Unit = ::println,
+    private val log: (String) -> Unit,
 ) {
     data object HelloPayload : CustomPacketPayload {
         val TYPE =
@@ -150,23 +151,20 @@ class ChannelClient(
             return
         }
         val serverKeyBase64 = packet.publicKey
-        log("Received server public key: $serverKeyBase64")
 
-        val (host, port) =
+        val identity =
             getServerAddress() ?: run {
-                log("Venus: could not determine server address - aborting")
+                log("Venus: could not determine server address")
                 return
             }
-        val storedKey = ServerKeyStore.getStoredKey(host, port)
+        val storedKey = ServerKeyStore.getStoredKey(identity)
         if (storedKey == null) {
-            log("Venus: first connection to $host:$port - trusting and storing key")
-            ServerKeyStore.storeKey(host, port, serverKeyBase64)
+            log("Venus: first connection to $identity")
+            ServerKeyStore.storeKey(identity, serverKeyBase64)
         } else if (storedKey != serverKeyBase64) {
-            log("Venus: WARNING - server key mismatch for $host:$port! Possible MITM. Aborting.")
+            log("Venus: WARNING server key mismatch for $identity")
             sendError("mitm_key_mismatch")
             return
-        } else {
-            log("Venus: server key verified for $host:$port")
         }
 
         val keyPacket =
@@ -204,19 +202,19 @@ class ChannelClient(
                 return
             }
 
-        val (host, port) =
+        val identity =
             getServerAddress() ?: run {
-                log("Venus: could not determine server address - aborting")
+                log("Venus: could not determine server address")
                 return
             }
-        val storedKeyB64 = ServerKeyStore.getStoredKey(host, port)
+        val storedKeyB64 = ServerKeyStore.getStoredKey(identity)
         if (storedKeyB64 == null) {
-            log("Venus: no stored server key - aborting")
+            log("Venus: no stored server key")
             return
         }
         val serverPublicKey = Handshake.decodePublicKey(storedKeyB64)
         if (!Handshake.verify(challenge, serverSig, serverPublicKey)) {
-            log("Venus: WARNING - server signature verification failed! Possible MITM. Aborting.")
+            log("Venus: WARNING - server signature verification failed")
             sendError("mitm_sig_fail")
             return
         }
@@ -232,7 +230,6 @@ class ChannelClient(
                 ),
             )
         ClientPlayNetworking.send(AuthResponsePayload(response))
-        log("Venus: sent auth response")
     }
 
     private fun sendError(reason: String) {
@@ -244,12 +241,15 @@ class ChannelClient(
         ClientPlayNetworking.send(ErrorPayload(data))
     }
 
-    private fun getServerAddress(): Pair<String, Int>? {
+    private fun getServerAddress(): ServerKeyStore.ServerIdentity? {
         val serverInfo = Minecraft.getInstance().currentServer ?: return null
-        val parts = serverInfo.ip.split(":")
-        val host = parts[0]
-        val port = if (parts.size > 1) parts[1].toIntOrNull() ?: 25565 else 25565
-        return Pair(host, port)
+        if (!ServerAddress.isValidAddress(serverInfo.ip)) return null
+        val address = ServerAddress.parseString(serverInfo.ip)
+        val host = address.host
+        return ServerKeyStore.ServerIdentity(
+            host = ServerKeyStore.normalizeHost(host),
+            port = address.port,
+        )
     }
 
     companion object {

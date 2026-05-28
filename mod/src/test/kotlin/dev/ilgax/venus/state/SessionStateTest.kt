@@ -41,4 +41,19 @@ class SessionStateTest {
         assertNull(SessionState.latestStats)
         assertTrue(SessionState.commandResponses.isEmpty())
     }
+
+    @Test
+    fun `command response history retains multiple entries until reset`() {
+        val first = CmdResponsePacket("cmd_response", "say one", listOf("one"))
+        val second = CmdResponsePacket("cmd_response", "say two", listOf("two"))
+
+        SessionState.addCommandResponse(first)
+        SessionState.addCommandResponse(second)
+
+        assertEquals(listOf(first, second), SessionState.commandResponses)
+
+        SessionState.reset()
+
+        assertTrue(SessionState.commandResponses.isEmpty())
+    }
 }

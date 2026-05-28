@@ -27,8 +27,8 @@ class PacketHandler(
             return
         }
 
-        log("Venus: session active!")
         SessionState.activate()
+        log("Venus: session ready")
         val subscription =
             json.encodeToString(
                 StatSubscribePacket.serializer(),
@@ -42,7 +42,6 @@ class PacketHandler(
     }
 
     fun handleData(data: String) {
-        log("Venus data received: $data")
         val type =
             try {
                 json

@@ -64,6 +64,24 @@ class PacketsTest {
     }
 
     @Test
+    fun `stat subscription encodes interval and requested stats`() {
+        assertEquals(
+            """{"type":"stat_subscribe","interval_seconds":5,"stats":["tps","ram","mspt"]}""",
+            json.encodeToString(
+                StatSubscribePacket(type = "stat_subscribe", intervalSeconds = 5, stats = listOf("tps", "ram", "mspt")),
+            ),
+        )
+    }
+
+    @Test
+    fun `command response encodes command output lines`() {
+        assertEquals(
+            """{"type":"cmd_response","command":"say hi","lines":["hi","done"]}""",
+            json.encodeToString(CmdResponsePacket(type = "cmd_response", command = "say hi", lines = listOf("hi", "done"))),
+        )
+    }
+
+    @Test
     fun `stats response omits fields not requested`() {
         val encoded = json.encodeToString(StatsPacket(type = "stats", tps = 19.8, ramUsed = 412, ramMax = 1024))
 
