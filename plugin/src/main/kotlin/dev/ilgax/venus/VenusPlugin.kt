@@ -9,6 +9,7 @@ import dev.ilgax.venus.commands.VenusCommand
 import dev.ilgax.venus.config.VenusConfig
 import dev.ilgax.venus.handlers.AuthHandler
 import dev.ilgax.venus.handlers.ConsoleHandler
+import dev.ilgax.venus.handlers.LogHandler
 import dev.ilgax.venus.handlers.StatsHandler
 import dev.ilgax.venus.protocol.VenusChannels
 import dev.ilgax.venus.stats.StatSubscriptionManager
@@ -28,6 +29,7 @@ class VenusPlugin :
     Listener {
     private val json = Json { ignoreUnknownKeys = true }
     private lateinit var authHandler: AuthHandler
+    private lateinit var logHandler: LogHandler
     private lateinit var channelListener: ChannelListener
 
     override fun onEnable() {
@@ -38,12 +40,14 @@ class VenusPlugin :
         AuthorizedKeys.init(dataFolder)
 
         val sendData = { player: Player, data: String -> sendPayloadToPlayer(player, "data", data) }
+        logHandler = LogHandler(this, json, sendData)
         val packetRouter =
             PacketRouter(
                 this,
                 json,
-                ConsoleHandler(this, json, sendData),
+                ConsoleHandler(this, json, sendData, logHandler::suppressNextFor),
                 StatsHandler(this, json, sendData),
+                logHandler,
             )
         authHandler =
             AuthHandler(
@@ -55,6 +59,7 @@ class VenusPlugin :
                 sendReady = { player, data -> sendPayloadToPlayer(player, "ready", data) },
             )
         channelListener = ChannelListener(authHandler, packetRouter)
+        logHandler.start()
 
         registerCommand("venus", VenusCommand(this, authHandler))
         server.pluginManager.registerEvents(this, this)
@@ -68,6 +73,7 @@ class VenusPlugin :
 
     override fun onDisable() {
         logger.info("Venus disabled")
+        logHandler.stop()
         authHandler.cancelAllTimeouts()
         StatSubscriptionManager.cancelAll()
         SessionManager.clearAll()
@@ -81,6 +87,7 @@ class VenusPlugin :
     @EventHandler
     fun onPlayerQuit(event: PlayerQuitEvent) {
         authHandler.onPlayerQuit(event.player)
+        logHandler.unsubscribe(event.player.uniqueId)
     }
 
     private fun sendPayloadToPlayer(

@@ -11,6 +11,7 @@ import dev.ilgax.venus.protocol.AuthChallengePacket
 import dev.ilgax.venus.protocol.AuthResponsePacket
 import dev.ilgax.venus.protocol.ClientKeyPacket
 import dev.ilgax.venus.protocol.ConsoleCmdPacket
+import dev.ilgax.venus.protocol.ConsoleLogSubscribePacket
 import dev.ilgax.venus.protocol.ErrorPacket
 import dev.ilgax.venus.protocol.ServerKeyPacket
 import kotlinx.serialization.json.Json
@@ -134,6 +135,15 @@ class ChannelClient(
             json.encodeToString(
                 ConsoleCmdPacket.serializer(),
                 ConsoleCmdPacket(type = "console_cmd", command = command),
+            )
+        sendCommand(data)
+    }
+
+    fun sendLogSubscribe() {
+        val data =
+            json.encodeToString(
+                ConsoleLogSubscribePacket.serializer(),
+                ConsoleLogSubscribePacket(type = "log_subscribe"),
             )
         sendCommand(data)
     }

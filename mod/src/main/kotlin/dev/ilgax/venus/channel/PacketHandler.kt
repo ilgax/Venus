@@ -1,6 +1,7 @@
 package dev.ilgax.venus.channel
 
 import dev.ilgax.venus.protocol.CmdResponsePacket
+import dev.ilgax.venus.protocol.ConsoleLogPacket
 import dev.ilgax.venus.protocol.ReadyPacket
 import dev.ilgax.venus.protocol.StatSubscribePacket
 import dev.ilgax.venus.protocol.StatsPacket
@@ -34,7 +35,7 @@ class PacketHandler(
                 StatSubscribePacket.serializer(),
                 StatSubscribePacket(
                     type = "stat_subscribe",
-                    intervalSeconds = 2,
+                    intervalSeconds = 1,
                     stats = listOf("tps", "ram", "mspt", "uptime"),
                 ),
             )
@@ -55,6 +56,7 @@ class PacketHandler(
             }
         when (type) {
             "stats" -> handleStats(data)
+            "console_log" -> handleConsoleLog(data)
             "cmd_response" -> handleCommandResponse(data)
             else -> log("Venus: unexpected data packet type: $type")
         }
@@ -80,5 +82,16 @@ class PacketHandler(
                 return
             }
         SessionState.addCommandResponse(packet)
+    }
+
+    private fun handleConsoleLog(data: String) {
+        val packet =
+            try {
+                json.decodeFromString(ConsoleLogPacket.serializer(), data)
+            } catch (e: Exception) {
+                log("Venus: invalid console_log packet - ${e.message}")
+                return
+            }
+        SessionState.addConsoleLines(packet.lines)
     }
 }

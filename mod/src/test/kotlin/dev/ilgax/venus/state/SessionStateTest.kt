@@ -27,6 +27,7 @@ class SessionStateTest {
         assertTrue(SessionState.sessionActive)
         assertEquals(stats, SessionState.latestStats)
         assertEquals(listOf(response), SessionState.commandResponses)
+        assertEquals(listOf("> say hi", "hi"), SessionState.consoleLines)
     }
 
     @Test
@@ -55,5 +56,15 @@ class SessionStateTest {
         SessionState.reset()
 
         assertTrue(SessionState.commandResponses.isEmpty())
+        assertTrue(SessionState.consoleLines.isEmpty())
+    }
+
+    @Test
+    fun `console line history retains only latest entries until reset`() {
+        SessionState.addConsoleLines((1..600).map { "line $it" })
+
+        assertEquals(500, SessionState.consoleLines.size)
+        assertEquals("line 101", SessionState.consoleLines.first())
+        assertEquals("line 600", SessionState.consoleLines.last())
     }
 }

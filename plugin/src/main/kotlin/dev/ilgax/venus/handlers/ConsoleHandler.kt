@@ -7,11 +7,13 @@ import kotlinx.serialization.json.Json
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
 import org.bukkit.entity.Player
 import org.bukkit.plugin.java.JavaPlugin
+import java.util.UUID
 
 class ConsoleHandler(
     private val plugin: JavaPlugin,
     private val json: Json,
     private val sendData: (Player, String) -> Unit,
+    private val suppressOwnExecutionLog: (UUID, String) -> Unit = { _, _ -> },
 ) {
     fun handle(
         player: Player,
@@ -24,20 +26,23 @@ class ConsoleHandler(
                 plugin.logger.warning("${player.name} sent malformed console_cmd packet: ${e.message}")
                 return
             }
-        plugin.logger.info("${player.name} executed console command: ${packet.command}")
+        val executionLog = "${player.name} executed console command: ${packet.command}"
+        suppressOwnExecutionLog(player.uniqueId, executionLog)
+        plugin.logger.info(executionLog)
         val lines = mutableListOf<String>()
         val sender =
             plugin.server.createCommandSender { component ->
                 lines.add(PlainTextComponentSerializer.plainText().serialize(component))
             }
-        plugin.server.dispatchCommand(sender, packet.command)
-        if (lines.isNotEmpty()) {
-            val response =
-                json.encodeToString(
-                    CmdResponsePacket.serializer(),
-                    CmdResponsePacket(type = "cmd_response", command = packet.command, lines = lines),
-                )
-            sendData(player, response)
+        val dispatched = plugin.server.dispatchCommand(sender, packet.command)
+        if (!dispatched && lines.isEmpty()) {
+            lines.add("Unknown command.")
         }
+        val response =
+            json.encodeToString(
+                CmdResponsePacket.serializer(),
+                CmdResponsePacket(type = "cmd_response", command = packet.command, lines = lines),
+            )
+        sendData(player, response)
     }
 }

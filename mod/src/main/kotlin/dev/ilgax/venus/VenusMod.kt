@@ -30,7 +30,7 @@ class VenusMod : ClientModInitializer {
         channelClient = ChannelClient(json, keyManager, log)
         val packetHandler = PacketHandler(json, channelClient::sendCommand, log)
         channelClient.register(packetHandler)
-        PanelKeybind.register()
+        PanelKeybind.register(channelClient)
 
         ClientPlayConnectionEvents.JOIN.register { _, _, _ ->
             channelClient.sendHello()

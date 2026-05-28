@@ -65,6 +65,17 @@ data class ConsoleCmdPacket(
 )
 
 @Serializable
+data class ConsoleLogSubscribePacket(
+    val type: String,
+)
+
+@Serializable
+data class ConsoleLogPacket(
+    val type: String,
+    val lines: List<String>,
+)
+
+@Serializable
 data class CmdResponsePacket(
     val type: String,
     val command: String,

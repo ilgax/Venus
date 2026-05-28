@@ -1,6 +1,7 @@
 package dev.ilgax.venus.keybind
 
 import com.mojang.blaze3d.platform.InputConstants
+import dev.ilgax.venus.channel.ChannelClient
 import dev.ilgax.venus.gui.PanelScreen
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper
@@ -24,23 +25,39 @@ object PanelKeybind {
             category,
         )
 
-    fun register() {
+    fun register(channelClient: ChannelClient) {
         KeyBindingHelper.registerKeyBinding(keybind)
 
         ClientTickEvents.END_CLIENT_TICK.register { client ->
             while (keybind.consumeClick()) {
-                toggle(client)
+                toggle(client, channelClient)
             }
         }
     }
 
-    fun matches(keyEvent: KeyEvent): Boolean = keybind.matches(keyEvent)
+    fun matches(
+        keyEvent: KeyEvent,
+        textInputFocused: Boolean = false,
+    ): Boolean {
+        if (textInputFocused) {
+            return keyEvent.key() == GLFW.GLFW_KEY_F6 && keyEvent.modifiers() == 0
+        }
+        return keyEvent.modifiers() == 0 && keybind.matches(keyEvent)
+    }
 
-    private fun toggle(client: Minecraft) {
+    private fun toggle(
+        client: Minecraft,
+        channelClient: ChannelClient,
+    ) {
         if (client.screen is PanelScreen) {
             client.setScreen(null)
         } else {
-            client.setScreen(PanelScreen())
+            client.setScreen(
+                PanelScreen(
+                    sendConsoleCommand = channelClient::sendConsoleCommand,
+                    subscribeLogs = channelClient::sendLogSubscribe,
+                ),
+            )
         }
     }
 }

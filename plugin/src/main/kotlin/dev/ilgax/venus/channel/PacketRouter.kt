@@ -2,6 +2,7 @@ package dev.ilgax.venus.channel
 
 import dev.ilgax.venus.auth.SessionManager
 import dev.ilgax.venus.handlers.ConsoleHandler
+import dev.ilgax.venus.handlers.LogHandler
 import dev.ilgax.venus.handlers.StatsHandler
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
@@ -14,6 +15,7 @@ internal enum class CommandRoute(
     val packetType: String,
 ) {
     CONSOLE_CMD("console_cmd"),
+    LOG_SUBSCRIBE("log_subscribe"),
     STAT_SUBSCRIBE("stat_subscribe"),
     STAT_GET("stat_get"),
     ;
@@ -28,6 +30,7 @@ class PacketRouter(
     private val json: Json,
     private val consoleHandler: ConsoleHandler,
     private val statsHandler: StatsHandler,
+    private val logHandler: LogHandler,
 ) {
     fun handleCommand(
         player: Player,
@@ -54,6 +57,7 @@ class PacketRouter(
 
         when (CommandRoute.fromPacketType(type)) {
             CommandRoute.CONSOLE_CMD -> consoleHandler.handle(player, data)
+            CommandRoute.LOG_SUBSCRIBE -> logHandler.handleSubscribe(player, data)
             CommandRoute.STAT_SUBSCRIBE -> statsHandler.handleSubscribe(player, data)
             CommandRoute.STAT_GET -> statsHandler.handleGet(player, data)
             null -> plugin.logger.warning("${player.name} sent unknown cmd packet type: $type")

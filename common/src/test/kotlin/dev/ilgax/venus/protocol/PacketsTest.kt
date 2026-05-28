@@ -64,6 +64,18 @@ class PacketsTest {
     }
 
     @Test
+    fun `console log packets use typed json envelopes`() {
+        assertEquals(
+            """{"type":"log_subscribe"}""",
+            json.encodeToString(ConsoleLogSubscribePacket(type = "log_subscribe")),
+        )
+        assertEquals(
+            """{"type":"console_log","lines":["one","two"]}""",
+            json.encodeToString(ConsoleLogPacket(type = "console_log", lines = listOf("one", "two"))),
+        )
+    }
+
+    @Test
     fun `stat subscription encodes interval and requested stats`() {
         assertEquals(
             """{"type":"stat_subscribe","interval_seconds":5,"stats":["tps","ram","mspt"]}""",

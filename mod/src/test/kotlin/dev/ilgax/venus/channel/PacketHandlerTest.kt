@@ -1,6 +1,7 @@
 package dev.ilgax.venus.channel
 
 import dev.ilgax.venus.protocol.CmdResponsePacket
+import dev.ilgax.venus.protocol.ConsoleLogPacket
 import dev.ilgax.venus.protocol.ReadyPacket
 import dev.ilgax.venus.protocol.StatSubscribePacket
 import dev.ilgax.venus.protocol.StatsPacket
@@ -31,7 +32,7 @@ class PacketHandlerTest {
         assertTrue(SessionState.sessionActive)
         val subscription = json.decodeFromString(StatSubscribePacket.serializer(), sent.single())
         assertEquals("stat_subscribe", subscription.type)
-        assertEquals(2, subscription.intervalSeconds)
+        assertEquals(1, subscription.intervalSeconds)
         assertEquals(listOf("tps", "ram", "mspt", "uptime"), subscription.stats)
     }
 
@@ -40,12 +41,15 @@ class PacketHandlerTest {
         val handler = PacketHandler(json, {}) {}
         val stats = StatsPacket(type = "stats", tps = 19.9, mspt = 23.4, uptime = 30)
         val response = CmdResponsePacket(type = "cmd_response", command = "say hi", lines = listOf("hi"))
+        val consoleLog = ConsoleLogPacket(type = "console_log", lines = listOf("[INFO]: started"))
 
         handler.handleData(json.encodeToString(StatsPacket.serializer(), stats))
+        handler.handleData(json.encodeToString(ConsoleLogPacket.serializer(), consoleLog))
         handler.handleData(json.encodeToString(CmdResponsePacket.serializer(), response))
 
         assertEquals(stats, SessionState.latestStats)
         assertEquals(listOf(response), SessionState.commandResponses)
+        assertEquals(listOf("[INFO]: started", "> say hi", "hi"), SessionState.consoleLines)
     }
 
     @Test

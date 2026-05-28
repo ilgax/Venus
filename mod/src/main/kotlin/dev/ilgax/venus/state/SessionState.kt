@@ -13,9 +13,13 @@ object SessionState {
         private set
 
     private val responses = mutableListOf<CmdResponsePacket>()
+    private val console = mutableListOf<String>()
 
     val commandResponses: List<CmdResponsePacket>
         get() = synchronized(responses) { responses.toList() }
+
+    val consoleLines: List<String>
+        get() = synchronized(console) { console.toList() }
 
     fun activate() {
         sessionActive = true
@@ -29,6 +33,16 @@ object SessionState {
         synchronized(responses) {
             responses.add(response)
         }
+        addConsoleLines(listOf("> ${response.command}") + response.lines)
+    }
+
+    fun addConsoleLines(lines: List<String>) {
+        synchronized(console) {
+            console.addAll(lines)
+            while (console.size > MAX_CONSOLE_LINES) {
+                console.removeAt(0)
+            }
+        }
     }
 
     fun reset() {
@@ -37,5 +51,10 @@ object SessionState {
         synchronized(responses) {
             responses.clear()
         }
+        synchronized(console) {
+            console.clear()
+        }
     }
+
+    private const val MAX_CONSOLE_LINES = 500
 }
