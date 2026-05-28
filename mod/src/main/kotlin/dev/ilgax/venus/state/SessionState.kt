@@ -45,6 +45,12 @@ object SessionState {
         }
     }
 
+    fun clearConsole() {
+        synchronized(console) {
+            console.clear()
+        }
+    }
+
     fun reset() {
         sessionActive = false
         latestStats = null
