@@ -89,7 +89,6 @@ class AuthHandlerTest {
         mockkObject(VenusConfig)
         mockkObject(StatSubscriptionManager)
 
-        every { VenusConfig.cacheVerifiedUuid } returns false
         every { VenusConfig.authTimeoutSeconds } returns 30
         every { VenusConfig.maxUsers } returns 10
 
@@ -100,7 +99,6 @@ class AuthHandlerTest {
         every { SessionManager.activate(any(), any()) } just Runs
         every { SessionManager.deactivate(any()) } just Runs
         every { SessionManager.getPending(any()) } returns null
-        every { SessionManager.getCachedKey(any()) } returns null
         every { StatSubscriptionManager.cancel(any()) } just Runs
 
         handler =

@@ -6,6 +6,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -19,7 +20,6 @@ class SessionManagerTest {
         SessionManager.deactivate(uuid)
         SessionManager.removePending(uuid)
         SessionManager.removePendingApproval(uuid)
-        SessionManager.clearUUIDCache(uuid)
     }
 
     @Test
@@ -139,25 +139,6 @@ class SessionManagerTest {
     }
 
     @Test
-    fun `cacheUUID and getCachedKey roundtrip`() {
-        val b64 = "cached_key_base64"
-        SessionManager.cacheUUID(uuid, b64)
-        assertEquals(b64, SessionManager.getCachedKey(uuid))
-    }
-
-    @Test
-    fun `clearUUIDCache removes entry`() {
-        SessionManager.cacheUUID(uuid, "test")
-        assertEquals("test", SessionManager.clearUUIDCache(uuid))
-        assertNull(SessionManager.getCachedKey(uuid))
-    }
-
-    @Test
-    fun `getCachedKey returns null for unknown uuid`() {
-        assertNull(SessionManager.getCachedKey(UUID.randomUUID()))
-    }
-
-    @Test
     fun `PendingSession equals with same challenge content`() {
         val challenge = ByteArray(32) { 1 }
         val challengeCopy = challenge.copyOf()
@@ -173,7 +154,7 @@ class SessionManagerTest {
         val c2 = ByteArray(32) { 2 }
         val s1 = PendingSession(keyPair.public, c1)
         val s2 = PendingSession(keyPair.public, c2)
-        assertFalse(s1 == s2)
+        assertNotEquals(s1, s2)
     }
 
     @Test
@@ -182,6 +163,6 @@ class SessionManagerTest {
         val challenge = ByteArray(32) { 1 }
         val s1 = PendingSession(keyPair.public, challenge)
         val s2 = PendingSession(otherKeyPair.public, challenge.copyOf())
-        assertFalse(s1 == s2)
+        assertNotEquals(s1, s2)
     }
 }

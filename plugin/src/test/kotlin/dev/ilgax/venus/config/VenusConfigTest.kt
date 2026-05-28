@@ -19,7 +19,6 @@ class VenusConfigTest {
         every { plugin.logger } returns Logger.getAnonymousLogger()
         every { config.getInt("max_users", any()) } returns 1
         every { config.getInt("auth_timeout_seconds", any()) } returns 60
-        every { config.getBoolean("cache_verified_uuid", any()) } returns true
 
         VenusConfig.load(plugin)
 
@@ -28,7 +27,6 @@ class VenusConfigTest {
 
         assertEquals(1, VenusConfig.maxUsers)
         assertEquals(60, VenusConfig.authTimeoutSeconds)
-        assertEquals(true, VenusConfig.cacheVerifiedUuid)
     }
 
     @Test
@@ -40,12 +38,10 @@ class VenusConfigTest {
         every { plugin.logger } returns Logger.getAnonymousLogger()
         every { config.getInt("max_users", any()) } returns 5
         every { config.getInt("auth_timeout_seconds", any()) } returns 120
-        every { config.getBoolean("cache_verified_uuid", any()) } returns false
 
         VenusConfig.load(plugin)
 
         assertEquals(5, VenusConfig.maxUsers)
         assertEquals(120, VenusConfig.authTimeoutSeconds)
-        assertEquals(false, VenusConfig.cacheVerifiedUuid)
     }
 }

@@ -73,19 +73,6 @@ class AuthHandler(
                 return
             }
 
-        if (plugin.server.onlineMode && VenusConfig.cacheVerifiedUuid) {
-            val cachedKey = SessionManager.getCachedKey(player.uniqueId)
-            if (cachedKey != null) {
-                if (cachedKey != clientPublicKeyBase64) {
-                    plugin.logger.warning("UUID cache mismatch for ${player.name} - key changed, falling through to full auth")
-                    SessionManager.clearUUIDCache(player.uniqueId)
-                } else {
-                    startChallenge(player, clientPublicKey, expireChallenge = true)
-                    return
-                }
-            }
-        }
-
         if (AuthorizedKeys.isAuthorized(clientPublicKeyBase64)) {
             startChallenge(player, clientPublicKey, expireChallenge = true)
         } else {
@@ -168,13 +155,6 @@ class AuthHandler(
         SessionManager.removePending(player.uniqueId)
         sessionTimeoutTasks.remove(player.uniqueId)?.cancel()
         SessionManager.activate(player.uniqueId, pending.clientPublicKey)
-
-        if (plugin.server.onlineMode && VenusConfig.cacheVerifiedUuid) {
-            SessionManager.cacheUUID(
-                player.uniqueId,
-                Base64.getEncoder().encodeToString(pending.clientPublicKey.encoded),
-            )
-        }
 
         val data =
             json.encodeToString(

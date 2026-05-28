@@ -31,7 +31,6 @@ object SessionManager {
     private val pendingSessions = ConcurrentHashMap<UUID, PendingSession>()
     private val pendingApprovals = ConcurrentHashMap<UUID, PendingApproval>()
     private val activeSessions = ConcurrentHashMap<UUID, PublicKey>()
-    private val uuidKeyCache = ConcurrentHashMap<UUID, String>()
 
     fun addPending(
         uuid: UUID,
@@ -72,21 +71,9 @@ object SessionManager {
         pendingApprovals.remove(uuid)
     }
 
-    fun cacheUUID(
-        uuid: UUID,
-        publicKeyBase64: String,
-    ) {
-        uuidKeyCache[uuid] = publicKeyBase64
-    }
-
-    fun getCachedKey(uuid: UUID): String? = uuidKeyCache[uuid]
-
-    fun clearUUIDCache(uuid: UUID) = uuidKeyCache.remove(uuid)
-
     fun clearAll() {
         pendingSessions.clear()
         pendingApprovals.clear()
         activeSessions.clear()
-        uuidKeyCache.clear()
     }
 }

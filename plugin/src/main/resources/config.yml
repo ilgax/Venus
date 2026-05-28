@@ -4,6 +4,3 @@ max_users: 1
 
 # auth_timeout_seconds: timeout for pending approval requests and auth challenges
 auth_timeout_seconds: 60
-
-# cache_verified_uuid: cache player UUID -> key fingerprint for faster re-auth on online mode servers
-cache_verified_uuid: true
