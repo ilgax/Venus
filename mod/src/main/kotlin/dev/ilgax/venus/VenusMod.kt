@@ -4,6 +4,7 @@ import dev.ilgax.venus.auth.KeyManager
 import dev.ilgax.venus.auth.ServerKeyStore
 import dev.ilgax.venus.channel.ChannelClient
 import dev.ilgax.venus.channel.PacketHandler
+import dev.ilgax.venus.keybind.PanelKeybind
 import dev.ilgax.venus.state.SessionState
 import kotlinx.serialization.json.Json
 import net.fabricmc.api.ClientModInitializer
@@ -29,6 +30,7 @@ class VenusMod : ClientModInitializer {
         channelClient = ChannelClient(json, keyManager, log)
         val packetHandler = PacketHandler(json, channelClient::sendCommand, log)
         channelClient.register(packetHandler)
+        PanelKeybind.register()
 
         ClientPlayConnectionEvents.JOIN.register { _, _, _ ->
             channelClient.sendHello()

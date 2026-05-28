@@ -155,6 +155,7 @@ class AuthHandler(
         SessionManager.removePending(player.uniqueId)
         sessionTimeoutTasks.remove(player.uniqueId)?.cancel()
         SessionManager.activate(player.uniqueId, pending.clientPublicKey)
+        plugin.logger.info("Venus session active for ${player.name}")
 
         val data =
             json.encodeToString(

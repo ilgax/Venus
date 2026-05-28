@@ -1,1 +1,46 @@
 package dev.ilgax.venus.keybind
+
+import com.mojang.blaze3d.platform.InputConstants
+import dev.ilgax.venus.gui.PanelScreen
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
+import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper
+import net.minecraft.client.KeyMapping
+import net.minecraft.client.Minecraft
+import net.minecraft.client.input.KeyEvent
+import net.minecraft.resources.Identifier
+import org.lwjgl.glfw.GLFW
+
+object PanelKeybind {
+    private val category =
+        KeyMapping.Category.register(
+            Identifier.fromNamespaceAndPath("venus", "venus"),
+        )
+
+    private val keybind =
+        KeyMapping(
+            "key.venus.panel",
+            InputConstants.Type.KEYSYM,
+            GLFW.GLFW_KEY_F6,
+            category,
+        )
+
+    fun register() {
+        KeyBindingHelper.registerKeyBinding(keybind)
+
+        ClientTickEvents.END_CLIENT_TICK.register { client ->
+            while (keybind.consumeClick()) {
+                toggle(client)
+            }
+        }
+    }
+
+    fun matches(keyEvent: KeyEvent): Boolean = keybind.matches(keyEvent)
+
+    private fun toggle(client: Minecraft) {
+        if (client.screen is PanelScreen) {
+            client.setScreen(null)
+        } else {
+            client.setScreen(PanelScreen())
+        }
+    }
+}
