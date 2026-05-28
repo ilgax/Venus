@@ -35,7 +35,6 @@ class VenusPlugin :
         logger.info("Venus enabled")
         val keyManager = KeyManager(dataFolder)
         keyManager.loadOrGenerate()
-        logger.info("Server keypair loaded")
         AuthorizedKeys.init(dataFolder)
 
         val sendData = { player: Player, data: String -> sendPayloadToPlayer(player, "data", data) }

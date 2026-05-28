@@ -36,14 +36,12 @@ class AuthHandler(
 
     fun handleHello(player: Player) {
         sessionTimeoutTasks.remove(player.uniqueId)?.cancel()
-        plugin.logger.info("Venus mod detected: ${player.name}")
         val data =
             json.encodeToString(
                 ServerKeyPacket.serializer(),
                 ServerKeyPacket(type = "server_key", publicKey = keyManager.publicKeyBase64),
             )
         sendKey(player, data)
-        plugin.logger.info("Sent server public key to ${player.name}")
     }
 
     fun handleClientKey(
@@ -82,7 +80,6 @@ class AuthHandler(
                     plugin.logger.warning("UUID cache mismatch for ${player.name} - key changed, falling through to full auth")
                     SessionManager.clearUUIDCache(player.uniqueId)
                 } else {
-                    plugin.logger.info("UUID cache hit for ${player.name} - skipping authorized_keys check")
                     startChallenge(player, clientPublicKey, expireChallenge = true)
                     return
                 }
@@ -91,7 +88,6 @@ class AuthHandler(
 
         if (AuthorizedKeys.isAuthorized(clientPublicKeyBase64)) {
             startChallenge(player, clientPublicKey, expireChallenge = true)
-            plugin.logger.info("Authorized key recognized for ${player.name} - sending challenge")
         } else {
             if (AuthorizedKeys.count() >= VenusConfig.maxUsers) {
                 plugin.logger.warning(
@@ -180,14 +176,12 @@ class AuthHandler(
             )
         }
 
-        plugin.logger.info("${player.name} authenticated successfully!")
         val data =
             json.encodeToString(
                 ReadyPacket.serializer(),
                 ReadyPacket(type = "ready"),
             )
         sendReady(player, data)
-        plugin.logger.info("Sent venus:ready to ${player.name}")
     }
 
     fun handleClientError(
@@ -238,7 +232,6 @@ class AuthHandler(
         sessionTimeoutTasks.remove(uuid)?.cancel()
         SessionManager.deactivate(uuid)
         StatSubscriptionManager.cancel(uuid)
-        plugin.logger.info("${player.name} disconnected - Venus session deactivated; re-authentication required on reconnect")
     }
 
     fun cancelAllTimeouts() {

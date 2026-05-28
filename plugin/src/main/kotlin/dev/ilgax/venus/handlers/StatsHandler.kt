@@ -25,7 +25,6 @@ class StatsHandler(
                 plugin.logger.warning("${player.name} sent malformed stat_subscribe packet: ${e.message}")
                 return
             }
-        plugin.logger.info("${player.name} subscribed to stats: ${packet.stats} every ${packet.intervalSeconds}s")
         StatSubscriptionManager.subscribe(player.uniqueId, packet.stats, packet.intervalSeconds, plugin) { statsJson ->
             sendData(player, statsJson)
         }
@@ -44,6 +43,5 @@ class StatsHandler(
             }
         val statsJson = StatsCollector.buildStatsJson(plugin.server, packet.stats)
         sendData(player, statsJson)
-        plugin.logger.info("${player.name} requested one-time stats: ${packet.stats}")
     }
 }
