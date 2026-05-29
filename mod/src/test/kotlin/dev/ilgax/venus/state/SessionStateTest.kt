@@ -1,6 +1,8 @@
 package dev.ilgax.venus.state
 
 import dev.ilgax.venus.protocol.CmdResponsePacket
+import dev.ilgax.venus.protocol.PlayerDetail
+import dev.ilgax.venus.protocol.PlayerListPacket
 import dev.ilgax.venus.protocol.StatsPacket
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -34,6 +36,27 @@ class SessionStateTest {
     fun `reset clears session data`() {
         SessionState.activate()
         SessionState.updateStats(StatsPacket(type = "stats", uptime = 30))
+        SessionState.updatePlayerList(
+            PlayerListPacket(
+                type = "player_list",
+                onlineCount = 1,
+                maxPlayers = 20,
+                onlinePlayers = emptyList(),
+                whitelistedPlayers = emptyList(),
+                blockedPlayers = emptyList(),
+            ),
+        )
+        SessionState.updatePlayerDetail(
+            PlayerDetail(
+                uuid = "1",
+                name = "Alice",
+                displayName = "Alice",
+                online = true,
+                operator = false,
+                whitelisted = true,
+                blocked = false,
+            ),
+        )
         SessionState.addCommandResponse(CmdResponsePacket("cmd_response", "say hi", listOf("hi")))
         SessionState.setServerInfo("play.venustest.com", "My Server")
 
@@ -44,6 +67,8 @@ class SessionStateTest {
         assertTrue(SessionState.commandResponses.isEmpty())
         assertNull(SessionState.serverAddress)
         assertNull(SessionState.serverListName)
+        assertNull(SessionState.latestPlayerList)
+        assertNull(SessionState.latestPlayerDetail)
     }
 
     @Test

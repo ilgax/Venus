@@ -83,6 +83,65 @@ data class CmdResponsePacket(
 )
 
 @Serializable
+data class PlayerListGetPacket(
+    val type: String,
+)
+
+@Serializable
+data class PlayerDetailGetPacket(
+    val type: String,
+    val uuid: String,
+)
+
+@Serializable
+data class PlayerSummaryPacket(
+    val uuid: String,
+    val name: String,
+    @SerialName("display_name") val displayName: String,
+    val online: Boolean,
+    val operator: Boolean,
+    val whitelisted: Boolean,
+    val blocked: Boolean,
+)
+
+@Serializable
+data class PlayerListPacket(
+    val type: String,
+    @SerialName("online_count") val onlineCount: Int,
+    @SerialName("max_players") val maxPlayers: Int,
+    @SerialName("online_players") val onlinePlayers: List<PlayerSummaryPacket>,
+    @SerialName("whitelisted_players") val whitelistedPlayers: List<PlayerSummaryPacket>,
+    @SerialName("blocked_players") val blockedPlayers: List<PlayerSummaryPacket>,
+)
+
+@Serializable
+data class PlayerDetailPacket(
+    val type: String,
+    val player: PlayerDetail,
+)
+
+@Serializable
+data class PlayerDetail(
+    val uuid: String,
+    val name: String,
+    @SerialName("display_name") val displayName: String,
+    val online: Boolean,
+    val operator: Boolean,
+    val whitelisted: Boolean,
+    val blocked: Boolean,
+    @SerialName("game_mode") val gameMode: String? = null,
+    val health: Double? = null,
+    @SerialName("max_health") val maxHealth: Double? = null,
+    @SerialName("food_level") val foodLevel: Int? = null,
+    val level: Int? = null,
+    @SerialName("experience_progress") val experienceProgress: Float? = null,
+    val world: String? = null,
+    val x: Double? = null,
+    val y: Double? = null,
+    val z: Double? = null,
+)
+
+@Serializable
 data class StatsPacket(
     val type: String,
     val tps: Double? = null,

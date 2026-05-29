@@ -3,6 +3,8 @@ package dev.ilgax.venus.channel
 import dev.ilgax.venus.protocol.CmdResponsePacket
 import dev.ilgax.venus.protocol.ConsoleLogPacket
 import dev.ilgax.venus.protocol.ErrorPacket
+import dev.ilgax.venus.protocol.PlayerDetailPacket
+import dev.ilgax.venus.protocol.PlayerListPacket
 import dev.ilgax.venus.protocol.ReadyPacket
 import dev.ilgax.venus.protocol.StatSubscribePacket
 import dev.ilgax.venus.protocol.StatsPacket
@@ -62,6 +64,8 @@ class PacketHandler(
             "stats" -> handleStats(data)
             "console_log" -> handleConsoleLog(data)
             "cmd_response" -> handleCommandResponse(data)
+            "player_list" -> handlePlayerList(data)
+            "player_detail" -> handlePlayerDetail(data)
             else -> log("Venus: unexpected data packet type: $type")
         }
     }
@@ -113,6 +117,28 @@ class PacketHandler(
                 return
             }
         SessionState.addConsoleLines(packet.lines)
+    }
+
+    private fun handlePlayerList(data: String) {
+        val packet =
+            try {
+                json.decodeFromString(PlayerListPacket.serializer(), data)
+            } catch (e: Exception) {
+                log("Venus: invalid player_list packet - ${e.message}")
+                return
+            }
+        SessionState.updatePlayerList(packet)
+    }
+
+    private fun handlePlayerDetail(data: String) {
+        val packet =
+            try {
+                json.decodeFromString(PlayerDetailPacket.serializer(), data)
+            } catch (e: Exception) {
+                log("Venus: invalid player_detail packet - ${e.message}")
+                return
+            }
+        SessionState.updatePlayerDetail(packet.player)
     }
 
     private fun authFailureMessage(reason: String): String =

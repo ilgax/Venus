@@ -56,6 +56,8 @@ object PanelKeybind {
                 PanelScreen(
                     sendConsoleCommand = channelClient::sendConsoleCommand,
                     subscribeLogs = channelClient::sendLogSubscribe,
+                    requestPlayerList = channelClient::sendPlayerListGet,
+                    requestPlayerDetail = channelClient::sendPlayerDetailGet,
                 ),
             )
         }

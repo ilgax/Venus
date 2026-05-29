@@ -65,6 +65,14 @@ class PacketsTest {
             """{"type":"console_cmd","command":"say hi"}""",
             json.encodeToString(ConsoleCmdPacket(type = "console_cmd", command = "say hi")),
         )
+        assertEquals(
+            """{"type":"player_list_get"}""",
+            json.encodeToString(PlayerListGetPacket(type = "player_list_get")),
+        )
+        assertEquals(
+            """{"type":"player_detail_get","uuid":"123"}""",
+            json.encodeToString(PlayerDetailGetPacket(type = "player_detail_get", uuid = "123")),
+        )
     }
 
     @Test
@@ -94,6 +102,62 @@ class PacketsTest {
         assertEquals(
             """{"type":"cmd_response","command":"say hi","lines":["hi","done"]}""",
             json.encodeToString(CmdResponsePacket(type = "cmd_response", command = "say hi", lines = listOf("hi", "done"))),
+        )
+    }
+
+    @Test
+    fun `player list and detail packets use typed json envelopes`() {
+        assertEquals(
+            """{"type":"player_list","online_count":2,"max_players":20,"online_players":[{"uuid":"1","name":"Alice","display_name":"Alice","online":true,"operator":false,"whitelisted":true,"blocked":false}],"whitelisted_players":[],"blocked_players":[]}""",
+            json.encodeToString(
+                PlayerListPacket(
+                    type = "player_list",
+                    onlineCount = 2,
+                    maxPlayers = 20,
+                    onlinePlayers =
+                        listOf(
+                            PlayerSummaryPacket(
+                                uuid = "1",
+                                name = "Alice",
+                                displayName = "Alice",
+                                online = true,
+                                operator = false,
+                                whitelisted = true,
+                                blocked = false,
+                            ),
+                        ),
+                    whitelistedPlayers = emptyList(),
+                    blockedPlayers = emptyList(),
+                ),
+            ),
+        )
+        assertEquals(
+            """{"type":"player_detail","player":{"uuid":"1","name":"Alice","display_name":"Alice","online":true,"operator":false,"whitelisted":true,"blocked":false,"game_mode":"survival","health":20.0,"max_health":20.0,"food_level":20,"level":3,"experience_progress":0.5,"world":"minecraft:overworld","x":1.0,"y":64.0,"z":-2.0}}""",
+            json.encodeToString(
+                PlayerDetailPacket(
+                    type = "player_detail",
+                    player =
+                        PlayerDetail(
+                            uuid = "1",
+                            name = "Alice",
+                            displayName = "Alice",
+                            online = true,
+                            operator = false,
+                            whitelisted = true,
+                            blocked = false,
+                            gameMode = "survival",
+                            health = 20.0,
+                            maxHealth = 20.0,
+                            foodLevel = 20,
+                            level = 3,
+                            experienceProgress = 0.5f,
+                            world = "minecraft:overworld",
+                            x = 1.0,
+                            y = 64.0,
+                            z = -2.0,
+                        ),
+                ),
+            ),
         )
     }
 

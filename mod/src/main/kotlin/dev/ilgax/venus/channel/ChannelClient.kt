@@ -13,6 +13,8 @@ import dev.ilgax.venus.protocol.ClientKeyPacket
 import dev.ilgax.venus.protocol.ConsoleCmdPacket
 import dev.ilgax.venus.protocol.ConsoleLogSubscribePacket
 import dev.ilgax.venus.protocol.ErrorPacket
+import dev.ilgax.venus.protocol.PlayerDetailGetPacket
+import dev.ilgax.venus.protocol.PlayerListGetPacket
 import dev.ilgax.venus.protocol.ServerKeyPacket
 import kotlinx.serialization.json.Json
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking
@@ -149,6 +151,24 @@ class ChannelClient(
             json.encodeToString(
                 ConsoleLogSubscribePacket.serializer(),
                 ConsoleLogSubscribePacket(type = "log_subscribe"),
+            )
+        sendCommand(data)
+    }
+
+    fun sendPlayerListGet() {
+        val data =
+            json.encodeToString(
+                PlayerListGetPacket.serializer(),
+                PlayerListGetPacket(type = "player_list_get"),
+            )
+        sendCommand(data)
+    }
+
+    fun sendPlayerDetailGet(uuid: String) {
+        val data =
+            json.encodeToString(
+                PlayerDetailGetPacket.serializer(),
+                PlayerDetailGetPacket(type = "player_detail_get", uuid = uuid),
             )
         sendCommand(data)
     }

@@ -13,6 +13,8 @@ class PacketRouterTest {
         assertEquals(CommandRoute.LOG_SUBSCRIBE, CommandRoute.fromPacketType("log_subscribe"))
         assertEquals(CommandRoute.STAT_SUBSCRIBE, CommandRoute.fromPacketType("stat_subscribe"))
         assertEquals(CommandRoute.STAT_GET, CommandRoute.fromPacketType("stat_get"))
+        assertEquals(CommandRoute.PLAYER_LIST_GET, CommandRoute.fromPacketType("player_list_get"))
+        assertEquals(CommandRoute.PLAYER_DETAIL_GET, CommandRoute.fromPacketType("player_detail_get"))
     }
 
     @Test
@@ -26,8 +28,9 @@ class PacketRouterTest {
         val consoleHandler = io.mockk.mockk<dev.ilgax.venus.handlers.ConsoleHandler>(relaxed = true)
         val statsHandler = io.mockk.mockk<dev.ilgax.venus.handlers.StatsHandler>(relaxed = true)
         val logHandler = io.mockk.mockk<dev.ilgax.venus.handlers.LogHandler>(relaxed = true)
+        val playersHandler = io.mockk.mockk<dev.ilgax.venus.handlers.PlayersHandler>(relaxed = true)
         val player = io.mockk.mockk<org.bukkit.entity.Player>(relaxed = true)
-        val router = createRouter(plugin, consoleHandler, statsHandler, logHandler)
+        val router = createRouter(plugin, consoleHandler, statsHandler, logHandler, playersHandler)
 
         io.mockk.mockkObject(dev.ilgax.venus.auth.SessionManager)
         io.mockk.every {
@@ -47,8 +50,9 @@ class PacketRouterTest {
         val consoleHandler = io.mockk.mockk<dev.ilgax.venus.handlers.ConsoleHandler>(relaxed = true)
         val statsHandler = io.mockk.mockk<dev.ilgax.venus.handlers.StatsHandler>(relaxed = true)
         val logHandler = io.mockk.mockk<dev.ilgax.venus.handlers.LogHandler>(relaxed = true)
+        val playersHandler = io.mockk.mockk<dev.ilgax.venus.handlers.PlayersHandler>(relaxed = true)
         val player = io.mockk.mockk<org.bukkit.entity.Player>(relaxed = true)
-        val router = createRouter(plugin, consoleHandler, statsHandler, logHandler)
+        val router = createRouter(plugin, consoleHandler, statsHandler, logHandler, playersHandler)
 
         io.mockk.mockkObject(dev.ilgax.venus.auth.SessionManager)
         io.mockk.every {
@@ -68,8 +72,9 @@ class PacketRouterTest {
         val consoleHandler = io.mockk.mockk<dev.ilgax.venus.handlers.ConsoleHandler>(relaxed = true)
         val statsHandler = io.mockk.mockk<dev.ilgax.venus.handlers.StatsHandler>(relaxed = true)
         val logHandler = io.mockk.mockk<dev.ilgax.venus.handlers.LogHandler>(relaxed = true)
+        val playersHandler = io.mockk.mockk<dev.ilgax.venus.handlers.PlayersHandler>(relaxed = true)
         val player = io.mockk.mockk<org.bukkit.entity.Player>(relaxed = true)
-        val router = createRouter(plugin, consoleHandler, statsHandler, logHandler)
+        val router = createRouter(plugin, consoleHandler, statsHandler, logHandler, playersHandler)
 
         io.mockk.mockkObject(dev.ilgax.venus.auth.SessionManager)
         io.mockk.every {
@@ -90,8 +95,9 @@ class PacketRouterTest {
         val consoleHandler = io.mockk.mockk<dev.ilgax.venus.handlers.ConsoleHandler>(relaxed = true)
         val statsHandler = io.mockk.mockk<dev.ilgax.venus.handlers.StatsHandler>(relaxed = true)
         val logHandler = io.mockk.mockk<dev.ilgax.venus.handlers.LogHandler>(relaxed = true)
+        val playersHandler = io.mockk.mockk<dev.ilgax.venus.handlers.PlayersHandler>(relaxed = true)
         val player = io.mockk.mockk<org.bukkit.entity.Player>(relaxed = true)
-        val router = createRouter(plugin, consoleHandler, statsHandler, logHandler)
+        val router = createRouter(plugin, consoleHandler, statsHandler, logHandler, playersHandler)
 
         io.mockk.mockkObject(dev.ilgax.venus.auth.SessionManager)
         io.mockk.every {
@@ -106,11 +112,35 @@ class PacketRouterTest {
         io.mockk.unmockkAll()
     }
 
+    @Test
+    fun `handleCommand routes player_list_get`() {
+        val plugin = io.mockk.mockk<org.bukkit.plugin.java.JavaPlugin>(relaxed = true)
+        val consoleHandler = io.mockk.mockk<dev.ilgax.venus.handlers.ConsoleHandler>(relaxed = true)
+        val statsHandler = io.mockk.mockk<dev.ilgax.venus.handlers.StatsHandler>(relaxed = true)
+        val logHandler = io.mockk.mockk<dev.ilgax.venus.handlers.LogHandler>(relaxed = true)
+        val playersHandler = io.mockk.mockk<dev.ilgax.venus.handlers.PlayersHandler>(relaxed = true)
+        val player = io.mockk.mockk<org.bukkit.entity.Player>(relaxed = true)
+        val router = createRouter(plugin, consoleHandler, statsHandler, logHandler, playersHandler)
+
+        io.mockk.mockkObject(dev.ilgax.venus.auth.SessionManager)
+        io.mockk.every {
+            dev.ilgax.venus.auth.SessionManager
+                .isActive(any())
+        } returns true
+
+        val data = """{"type":"player_list_get"}"""
+        router.handleCommand(player, data)
+        io.mockk.verify { playersHandler.handleListGet(player, data) }
+
+        io.mockk.unmockkAll()
+    }
+
     private fun createRouter(
         plugin: org.bukkit.plugin.java.JavaPlugin,
         consoleHandler: dev.ilgax.venus.handlers.ConsoleHandler,
         statsHandler: dev.ilgax.venus.handlers.StatsHandler,
         logHandler: dev.ilgax.venus.handlers.LogHandler,
+        playersHandler: dev.ilgax.venus.handlers.PlayersHandler,
     ): PacketRouter =
         PacketRouter(
             plugin,
@@ -118,5 +148,6 @@ class PacketRouterTest {
             consoleHandler,
             statsHandler,
             logHandler,
+            playersHandler,
         )
 }

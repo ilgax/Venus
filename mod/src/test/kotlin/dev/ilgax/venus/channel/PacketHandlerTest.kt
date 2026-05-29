@@ -3,6 +3,10 @@ package dev.ilgax.venus.channel
 import dev.ilgax.venus.protocol.CmdResponsePacket
 import dev.ilgax.venus.protocol.ConsoleLogPacket
 import dev.ilgax.venus.protocol.ErrorPacket
+import dev.ilgax.venus.protocol.PlayerDetail
+import dev.ilgax.venus.protocol.PlayerDetailPacket
+import dev.ilgax.venus.protocol.PlayerListPacket
+import dev.ilgax.venus.protocol.PlayerSummaryPacket
 import dev.ilgax.venus.protocol.ReadyPacket
 import dev.ilgax.venus.protocol.StatSubscribePacket
 import dev.ilgax.venus.protocol.StatsPacket
@@ -64,6 +68,52 @@ class PacketHandlerTest {
         assertEquals(stats, SessionState.latestStats)
         assertEquals(listOf(response), SessionState.commandResponses)
         assertEquals(listOf("[INFO]: started", "> say hi", "hi"), SessionState.consoleLines)
+    }
+
+    @Test
+    fun `player list and detail packets update player state`() {
+        val handler = PacketHandler(json, {}) {}
+        val playerList =
+            PlayerListPacket(
+                type = "player_list",
+                onlineCount = 1,
+                maxPlayers = 20,
+                onlinePlayers =
+                    listOf(
+                        PlayerSummaryPacket(
+                            uuid = "1",
+                            name = "Alice",
+                            displayName = "Alice",
+                            online = true,
+                            operator = false,
+                            whitelisted = true,
+                            blocked = false,
+                        ),
+                    ),
+                whitelistedPlayers = emptyList(),
+                blockedPlayers = emptyList(),
+            )
+        val playerDetail =
+            PlayerDetailPacket(
+                type = "player_detail",
+                player =
+                    PlayerDetail(
+                        uuid = "1",
+                        name = "Alice",
+                        displayName = "Alice",
+                        online = true,
+                        operator = false,
+                        whitelisted = true,
+                        blocked = false,
+                        gameMode = "survival",
+                    ),
+            )
+
+        handler.handleData(json.encodeToString(PlayerListPacket.serializer(), playerList))
+        handler.handleData(json.encodeToString(PlayerDetailPacket.serializer(), playerDetail))
+
+        assertEquals(playerList, SessionState.latestPlayerList)
+        assertEquals(playerDetail.player, SessionState.latestPlayerDetail)
     }
 
     @Test

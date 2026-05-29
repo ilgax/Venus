@@ -1,6 +1,8 @@
 package dev.ilgax.venus.gui
 
 import dev.ilgax.venus.gui.tabs.ConsoleTab
+import dev.ilgax.venus.gui.tabs.PlayerCategory
+import dev.ilgax.venus.gui.tabs.PlayersTab
 import dev.ilgax.venus.gui.tabs.StatsTab
 import dev.ilgax.venus.keybind.PanelKeybind
 import dev.ilgax.venus.state.SessionState
@@ -15,8 +17,14 @@ import org.lwjgl.glfw.GLFW
 class PanelScreen(
     private val sendConsoleCommand: (String) -> Unit,
     private val subscribeLogs: () -> Unit,
+    private val requestPlayerList: () -> Unit,
+    private val requestPlayerDetail: (String) -> Unit,
 ) : Screen(Component.translatable("screen.venus.panel")) {
     private var activeTab = PanelTab.OVERVIEW
+    private var hasRequestedPlayersList = false
+    private var selectedPlayerCategory = PlayerCategory.ONLINE
+    private var selectedPlayerUuid: String? = null
+    private var playersScrollOffset = 0
     private var logsSubscribed = false
     private var consoleScrollOffset = 0
     private var selectedConsoleStart: Int? = null
@@ -74,6 +82,7 @@ class PanelScreen(
 
         guiGraphics.fill(navX, navY, navX + navWidth, panelY + panelHeight - 12, COLOR_SIDEBAR)
         renderTab(guiGraphics, tabBounds(PanelTab.OVERVIEW), "Overview", PanelTab.OVERVIEW)
+        renderTab(guiGraphics, tabBounds(PanelTab.PLAYERS), "Players", PanelTab.PLAYERS)
         renderTab(guiGraphics, tabBounds(PanelTab.CONSOLE), "Console", PanelTab.CONSOLE)
 
         guiGraphics.fill(contentX, contentY, contentX + contentWidth, contentY + contentHeight, COLOR_CONTENT)
@@ -119,6 +128,53 @@ class PanelScreen(
         horizontalAmount: Double,
         verticalAmount: Double,
     ): Boolean {
+        if (activeTab == PanelTab.PLAYERS) {
+            val padding = panelPadding()
+            val panelX = padding
+            val panelY = padding
+            val panelWidth = width - padding * 2
+            val panelHeight = height - padding * 2
+            val navX = panelX + 12
+            val navY = panelY + headerHeight()
+            val contentX = navX + navWidth() + contentGap()
+            val contentY = navY
+            val contentWidth = panelX + panelWidth - contentX - 12
+            val contentHeight = panelY + panelHeight - contentY - 12
+
+            val hit =
+
+                PlayersTab.hitTest(
+                    font,
+                    contentX + 16,
+                    contentY + 16,
+                    contentWidth - 32,
+                    contentHeight - 32,
+                    mouseX.toInt(),
+                    mouseY.toInt(),
+                    SessionState.latestPlayerList,
+                    selectedPlayerCategory,
+                    selectedPlayerUuid,
+                    playersScrollOffset,
+                )
+            val listBounds = hit.listBounds
+            if (
+                listBounds != null &&
+                mouseX >= listBounds.x &&
+                mouseX < listBounds.x + listBounds.width &&
+                mouseY >= listBounds.y &&
+                mouseY < listBounds.y + listBounds.height
+            ) {
+                val list = SessionState.latestPlayerList
+                if (list != null) {
+                    val players = PlayersTab.playersForCategory(list, selectedPlayerCategory)
+                    val maxScroll = PlayersTab.maxScrollOffset(listBounds.height, players.size)
+                    val direction = if (verticalAmount > 0) -1 else 1
+                    playersScrollOffset = (playersScrollOffset + direction * SCROLL_LINES).coerceIn(0, maxScroll)
+                    return true
+                }
+            }
+        }
+
         val bounds = consoleBounds()
         if (
             activeTab == PanelTab.CONSOLE &&
@@ -142,6 +198,8 @@ class PanelScreen(
         val mouseY = mouseButtonEvent.y().toInt()
         val overviewTab = tabBounds(PanelTab.OVERVIEW)
         val consoleTab = tabBounds(PanelTab.CONSOLE)
+        val playersTab = tabBounds(PanelTab.PLAYERS)
+
         if (inside(mouseX, mouseY, overviewTab.x, overviewTab.y, overviewTab.width, overviewTab.height)) {
             activeTab = PanelTab.OVERVIEW
             updateInputVisibility()
@@ -153,6 +211,11 @@ class PanelScreen(
             updateInputVisibility()
             commandInput?.setFocused(true)
             setFocused(commandInput)
+            return true
+        }
+        if (inside(mouseX, mouseY, playersTab.x, playersTab.y, playersTab.width, playersTab.height)) {
+            activeTab = PanelTab.PLAYERS
+            updateInputVisibility()
             return true
         }
 
@@ -180,6 +243,68 @@ class PanelScreen(
             commandInput?.setFocused(false)
             setFocused(null)
             return true
+        }
+
+        if (activeTab == PanelTab.PLAYERS) {
+            val padding = panelPadding()
+            val panelX = padding
+            val panelY = padding
+            val panelWidth = width - padding * 2
+            val panelHeight = height - padding * 2
+            val navX = panelX + 12
+            val navY = panelY + headerHeight()
+            val contentX = navX + navWidth() + contentGap()
+            val contentY = navY
+            val contentWidth = panelX + panelWidth - contentX - 12
+            val contentHeight = panelY + panelHeight - contentY - 12
+
+            val hit =
+
+                PlayersTab.hitTest(
+                    font,
+                    contentX + 16,
+                    contentY + 16,
+                    contentWidth - 32,
+                    contentHeight - 32,
+                    mouseX,
+                    mouseY,
+                    SessionState.latestPlayerList,
+                    selectedPlayerCategory,
+                    selectedPlayerUuid,
+                    playersScrollOffset,
+                )
+
+            if (hit.backClicked) {
+                selectedPlayerUuid = null
+                return true
+            }
+
+            if (hit.categoryClicked != null && hit.categoryClicked != selectedPlayerCategory) {
+                selectedPlayerCategory = hit.categoryClicked
+                val list = SessionState.latestPlayerList
+                val currentUuid = selectedPlayerUuid
+                if (currentUuid != null && list != null) {
+                    val players = PlayersTab.playersForCategory(list, selectedPlayerCategory)
+                    if (players.none { it.uuid == currentUuid }) {
+                        selectedPlayerUuid = null
+                    }
+                }
+                playersScrollOffset = 0
+                return true
+            }
+            if (hit.refreshClicked && SessionState.sessionActive) {
+                if (selectedPlayerUuid != null) {
+                    requestPlayerDetail(selectedPlayerUuid!!)
+                } else {
+                    requestPlayerList()
+                }
+                return true
+            }
+            if (hit.playerUuidClicked != null) {
+                selectedPlayerUuid = hit.playerUuidClicked
+                requestPlayerDetail(hit.playerUuidClicked)
+                return true
+            }
         }
 
         return super.mouseClicked(mouseButtonEvent, doubleClick)
@@ -224,6 +349,34 @@ class PanelScreen(
             PanelTab.OVERVIEW -> {
                 updateInputVisibility()
                 StatsTab.render(guiGraphics, font, contentX + 16, contentY + 16, contentWidth - 32, contentHeight - 32)
+            }
+            PanelTab.PLAYERS -> {
+                updateInputVisibility()
+                if (SessionState.sessionActive && !hasRequestedPlayersList) {
+                    requestPlayerList()
+                    hasRequestedPlayersList = true
+                }
+
+                val list = SessionState.latestPlayerList
+                if (list != null) {
+                    val players = PlayersTab.playersForCategory(list, selectedPlayerCategory)
+                    val maxScroll = PlayersTab.maxScrollOffset(contentHeight - 32, players.size)
+                    playersScrollOffset = playersScrollOffset.coerceIn(0, maxScroll)
+                }
+
+                PlayersTab.render(
+                    guiGraphics,
+                    font,
+                    contentX + 16,
+                    contentY + 16,
+                    contentWidth - 32,
+                    contentHeight - 32,
+                    lastMouseX,
+                    lastMouseY,
+                    selectedPlayerCategory,
+                    selectedPlayerUuid,
+                    playersScrollOffset,
+                )
             }
 
             PanelTab.CONSOLE -> {
@@ -436,6 +589,7 @@ class PanelScreen(
             when (tab) {
                 PanelTab.OVERVIEW -> 8
                 PanelTab.CONSOLE -> 34
+                PanelTab.PLAYERS -> 60
             }
         return Bounds(nav.x + 8, nav.y + yOffset, nav.width - 16, TAB_HEIGHT)
     }
@@ -513,6 +667,7 @@ class PanelScreen(
     private enum class PanelTab {
         OVERVIEW,
         CONSOLE,
+        PLAYERS,
     }
 
     private data class Bounds(

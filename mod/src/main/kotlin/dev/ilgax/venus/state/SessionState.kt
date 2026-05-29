@@ -1,6 +1,8 @@
 package dev.ilgax.venus.state
 
 import dev.ilgax.venus.protocol.CmdResponsePacket
+import dev.ilgax.venus.protocol.PlayerDetail
+import dev.ilgax.venus.protocol.PlayerListPacket
 import dev.ilgax.venus.protocol.StatsPacket
 
 object SessionState {
@@ -18,6 +20,14 @@ object SessionState {
 
     @Volatile
     var serverListName: String? = null
+        private set
+
+    @Volatile
+    var latestPlayerList: PlayerListPacket? = null
+        private set
+
+    @Volatile
+    var latestPlayerDetail: PlayerDetail? = null
         private set
 
     private val responses = mutableListOf<CmdResponsePacket>()
@@ -55,6 +65,14 @@ object SessionState {
         }
     }
 
+    fun updatePlayerList(playerList: PlayerListPacket) {
+        latestPlayerList = playerList
+    }
+
+    fun updatePlayerDetail(playerDetail: PlayerDetail) {
+        latestPlayerDetail = playerDetail
+    }
+
     fun addCommandResponse(response: CmdResponsePacket) {
         synchronized(responses) {
             responses.add(response)
@@ -82,6 +100,8 @@ object SessionState {
         latestStats = null
         serverAddress = null
         serverListName = null
+        latestPlayerList = null
+        latestPlayerDetail = null
         synchronized(responses) {
             responses.clear()
         }

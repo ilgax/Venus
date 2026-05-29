@@ -10,6 +10,7 @@ import dev.ilgax.venus.config.VenusConfig
 import dev.ilgax.venus.handlers.AuthHandler
 import dev.ilgax.venus.handlers.ConsoleHandler
 import dev.ilgax.venus.handlers.LogHandler
+import dev.ilgax.venus.handlers.PlayersHandler
 import dev.ilgax.venus.handlers.StatsHandler
 import dev.ilgax.venus.protocol.VenusChannels
 import dev.ilgax.venus.stats.StatSubscriptionManager
@@ -48,6 +49,7 @@ class VenusPlugin :
                 ConsoleHandler(this, json, sendData, logHandler::suppressNextFor),
                 StatsHandler(this, json, sendData),
                 logHandler,
+                PlayersHandler(this, json, sendData),
             )
         authHandler =
             AuthHandler(
