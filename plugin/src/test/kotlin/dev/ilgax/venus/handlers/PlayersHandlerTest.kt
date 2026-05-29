@@ -1,11 +1,13 @@
 package dev.ilgax.venus.handlers
 
+import dev.ilgax.venus.protocol.PlayerActionResultPacket
 import dev.ilgax.venus.protocol.PlayerDetailPacket
 import dev.ilgax.venus.protocol.PlayerListPacket
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
 import org.bukkit.GameMode
 import org.bukkit.Location
 import org.bukkit.NamespacedKey
@@ -122,6 +124,168 @@ class PlayersHandlerTest {
         verify(exactly = 0) { sendData(any(), any()) }
     }
 
+    @Test
+    fun `handleAction heals online player and sends refreshed snapshots`() {
+        val plugin = mockk<JavaPlugin>(relaxed = true)
+        val server = mockk<Server>(relaxed = true)
+        val viewer = mockPlayer("Viewer", UUID.fromString("11111111-1111-1111-1111-111111111111"))
+        val targetUuid = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+        val target = mockPlayer("Alice", targetUuid)
+        val sendCalls = mutableListOf<String>()
+
+        every { plugin.server } returns server
+        every { plugin.logger } returns Logger.getAnonymousLogger()
+        every { server.getPlayer(targetUuid) } returns target
+        every { server.onlinePlayers } returns listOf(viewer, target)
+        every { server.maxPlayers } returns 20
+        every { server.whitelistedPlayers } returns emptySet()
+        every { server.bannedPlayers } returns emptySet()
+        every { server.offlinePlayers } returns emptyArray()
+
+        val handler = PlayersHandler(plugin, json) { _, data -> sendCalls.add(data) }
+        handler.handleAction(
+            viewer,
+            json.encodeToString(
+                dev.ilgax.venus.protocol.PlayerActionPacket(
+                    type = "player_action",
+                    requestId = "req-1",
+                    uuid = targetUuid.toString(),
+                    action = "heal",
+                ),
+            ),
+        )
+
+        val result = json.decodeFromString(PlayerActionResultPacket.serializer(), sendCalls[0])
+        assertEquals(true, result.success)
+        assertEquals("Player healed.", result.message)
+        assertEquals("player_detail", json.decodeFromString(PlayerDetailPacket.serializer(), sendCalls[1]).type)
+        assertEquals("player_list", json.decodeFromString(PlayerListPacket.serializer(), sendCalls[2]).type)
+        verify { target.health = 20.0 }
+    }
+
+    @Test
+    fun `handleAction fails online-only action for offline player without refresh`() {
+        val plugin = mockk<JavaPlugin>(relaxed = true)
+        val server = mockk<Server>(relaxed = true)
+        val viewer = mockPlayer("Viewer", UUID.fromString("11111111-1111-1111-1111-111111111111"))
+        val targetUuid = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+        val target = mockOfflinePlayer("Bob", targetUuid)
+        val sendCalls = mutableListOf<String>()
+
+        every { plugin.server } returns server
+        every { plugin.logger } returns Logger.getAnonymousLogger()
+        every { server.getPlayer(targetUuid) } returns null
+        every { server.whitelistedPlayers } returns linkedSetOf(target)
+        every { server.bannedPlayers } returns emptySet()
+        every { server.offlinePlayers } returns arrayOf(target)
+
+        val handler = PlayersHandler(plugin, json) { _, data -> sendCalls.add(data) }
+        handler.handleAction(
+            viewer,
+            json.encodeToString(
+                dev.ilgax.venus.protocol.PlayerActionPacket(
+                    type = "player_action",
+                    requestId = "req-2",
+                    uuid = targetUuid.toString(),
+                    action = "kill",
+                ),
+            ),
+        )
+
+        val result = json.decodeFromString(PlayerActionResultPacket.serializer(), sendCalls.single())
+        assertEquals(false, result.success)
+        assertEquals("Player must be online.", result.message)
+    }
+
+    @Test
+    fun `handleAction applies boolean and game mode actions`() {
+        val plugin = mockk<JavaPlugin>(relaxed = true)
+        val server = mockk<Server>(relaxed = true)
+        val viewer = mockPlayer("Viewer", UUID.fromString("11111111-1111-1111-1111-111111111111"))
+        val targetUuid = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+        val target = mockPlayer("Alice", targetUuid)
+        val sendCalls = mutableListOf<String>()
+
+        every { plugin.server } returns server
+        every { plugin.logger } returns Logger.getAnonymousLogger()
+        every { server.getPlayer(targetUuid) } returns target
+        every { server.onlinePlayers } returns listOf(target)
+        every { server.maxPlayers } returns 20
+        every { server.whitelistedPlayers } returns emptySet()
+        every { server.bannedPlayers } returns emptySet()
+        every { server.offlinePlayers } returns emptyArray()
+
+        val handler = PlayersHandler(plugin, json) { _, data -> sendCalls.add(data) }
+        handler.handleAction(
+            viewer,
+            json.encodeToString(
+                dev.ilgax.venus.protocol.PlayerActionPacket(
+                    type = "player_action",
+                    requestId = "req-3",
+                    uuid = targetUuid.toString(),
+                    action = "set_operator",
+                    value = JsonPrimitive(true),
+                ),
+            ),
+        )
+        handler.handleAction(
+            viewer,
+            json.encodeToString(
+                dev.ilgax.venus.protocol.PlayerActionPacket(
+                    type = "player_action",
+                    requestId = "req-4",
+                    uuid = targetUuid.toString(),
+                    action = "set_game_mode",
+                    value = JsonPrimitive("creative"),
+                ),
+            ),
+        )
+
+        verify { target.isOp = true }
+        verify { target.gameMode = GameMode.CREATIVE }
+        assertEquals(6, sendCalls.size)
+    }
+
+    @Test
+    fun `handleAction can re-whitelist uuid-only offline player after removal`() {
+        val plugin = mockk<JavaPlugin>(relaxed = true)
+        val server = mockk<Server>(relaxed = true)
+        val viewer = mockPlayer("Viewer", UUID.fromString("11111111-1111-1111-1111-111111111111"))
+        val targetUuid = UUID.fromString("dddddddd-dddd-dddd-dddd-dddddddddddd")
+        val target = mockOfflinePlayer("NeverJoined", targetUuid)
+        val sendCalls = mutableListOf<String>()
+
+        every { plugin.server } returns server
+        every { plugin.logger } returns Logger.getAnonymousLogger()
+        every { server.getPlayer(targetUuid) } returns null
+        every { server.whitelistedPlayers } returns emptySet()
+        every { server.bannedPlayers } returns emptySet()
+        every { server.offlinePlayers } returns emptyArray()
+        every { server.getOfflinePlayer(targetUuid) } returns target
+        every { server.onlinePlayers } returns listOf(viewer)
+        every { server.maxPlayers } returns 20
+
+        val handler = PlayersHandler(plugin, json) { _, data -> sendCalls.add(data) }
+        handler.handleAction(
+            viewer,
+            json.encodeToString(
+                dev.ilgax.venus.protocol.PlayerActionPacket(
+                    type = "player_action",
+                    requestId = "req-5",
+                    uuid = targetUuid.toString(),
+                    action = "set_whitelisted",
+                    value = JsonPrimitive(true),
+                ),
+            ),
+        )
+
+        val result = json.decodeFromString(PlayerActionResultPacket.serializer(), sendCalls[0])
+        assertEquals(true, result.success)
+        assertEquals("Player whitelisted.", result.message)
+        verify { target.isWhitelisted = true }
+    }
+
+    @Suppress("DEPRECATION")
     private fun mockPlayer(
         name: String,
         uuid: UUID,

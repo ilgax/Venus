@@ -1,6 +1,7 @@
 package dev.ilgax.venus.protocol
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -72,6 +73,31 @@ class PacketsTest {
         assertEquals(
             """{"type":"player_detail_get","uuid":"123"}""",
             json.encodeToString(PlayerDetailGetPacket(type = "player_detail_get", uuid = "123")),
+        )
+        assertEquals(
+            """{"type":"player_action","request_id":"req-1","uuid":"123","action":"set_whitelisted","value":true}""",
+            json.encodeToString(
+                PlayerActionPacket(
+                    type = "player_action",
+                    requestId = "req-1",
+                    uuid = "123",
+                    action = "set_whitelisted",
+                    value = JsonPrimitive(true),
+                ),
+            ),
+        )
+        assertEquals(
+            """{"type":"player_action_result","request_id":"req-1","uuid":"123","action":"heal","success":true,"message":"Player healed."}""",
+            json.encodeToString(
+                PlayerActionResultPacket(
+                    type = "player_action_result",
+                    requestId = "req-1",
+                    uuid = "123",
+                    action = "heal",
+                    success = true,
+                    message = "Player healed.",
+                ),
+            ),
         )
     }
 

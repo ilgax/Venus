@@ -1,6 +1,7 @@
 package dev.ilgax.venus.state
 
 import dev.ilgax.venus.protocol.CmdResponsePacket
+import dev.ilgax.venus.protocol.PlayerActionResultPacket
 import dev.ilgax.venus.protocol.PlayerDetail
 import dev.ilgax.venus.protocol.PlayerListPacket
 import dev.ilgax.venus.protocol.StatsPacket
@@ -57,6 +58,16 @@ class SessionStateTest {
                 blocked = false,
             ),
         )
+        SessionState.updatePlayerActionResult(
+            PlayerActionResultPacket(
+                type = "player_action_result",
+                requestId = "req-1",
+                uuid = "1",
+                action = "heal",
+                success = true,
+                message = "Player healed.",
+            ),
+        )
         SessionState.addCommandResponse(CmdResponsePacket("cmd_response", "say hi", listOf("hi")))
         SessionState.setServerInfo("play.venustest.com", "My Server")
 
@@ -69,6 +80,7 @@ class SessionStateTest {
         assertNull(SessionState.serverListName)
         assertNull(SessionState.latestPlayerList)
         assertNull(SessionState.latestPlayerDetail)
+        assertNull(SessionState.latestPlayerActionResult)
     }
 
     @Test

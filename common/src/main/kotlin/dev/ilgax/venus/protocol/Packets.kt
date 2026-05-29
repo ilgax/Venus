@@ -2,11 +2,7 @@ package dev.ilgax.venus.protocol
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-
-@Serializable
-data class HelloPacket(
-    val type: String,
-)
+import kotlinx.serialization.json.JsonElement
 
 @Serializable
 data class ServerKeyPacket(
@@ -91,6 +87,25 @@ data class PlayerListGetPacket(
 data class PlayerDetailGetPacket(
     val type: String,
     val uuid: String,
+)
+
+@Serializable
+data class PlayerActionPacket(
+    val type: String,
+    @SerialName("request_id") val requestId: String,
+    val uuid: String,
+    val action: String,
+    val value: JsonElement? = null,
+)
+
+@Serializable
+data class PlayerActionResultPacket(
+    val type: String,
+    @SerialName("request_id") val requestId: String,
+    val uuid: String,
+    val action: String,
+    val success: Boolean,
+    val message: String,
 )
 
 @Serializable

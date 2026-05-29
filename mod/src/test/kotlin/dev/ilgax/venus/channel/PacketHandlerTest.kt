@@ -3,6 +3,7 @@ package dev.ilgax.venus.channel
 import dev.ilgax.venus.protocol.CmdResponsePacket
 import dev.ilgax.venus.protocol.ConsoleLogPacket
 import dev.ilgax.venus.protocol.ErrorPacket
+import dev.ilgax.venus.protocol.PlayerActionResultPacket
 import dev.ilgax.venus.protocol.PlayerDetail
 import dev.ilgax.venus.protocol.PlayerDetailPacket
 import dev.ilgax.venus.protocol.PlayerListPacket
@@ -111,9 +112,22 @@ class PacketHandlerTest {
 
         handler.handleData(json.encodeToString(PlayerListPacket.serializer(), playerList))
         handler.handleData(json.encodeToString(PlayerDetailPacket.serializer(), playerDetail))
+        handler.handleData(
+            json.encodeToString(
+                PlayerActionResultPacket(
+                    type = "player_action_result",
+                    requestId = "req-1",
+                    uuid = "1",
+                    action = "heal",
+                    success = true,
+                    message = "Player healed.",
+                ),
+            ),
+        )
 
         assertEquals(playerList, SessionState.latestPlayerList)
         assertEquals(playerDetail.player, SessionState.latestPlayerDetail)
+        assertEquals("heal", SessionState.latestPlayerActionResult?.action)
     }
 
     @Test

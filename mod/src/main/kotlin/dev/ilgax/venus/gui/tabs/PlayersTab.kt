@@ -17,12 +17,18 @@ enum class PlayerCategory(
     BLOCKED("Banned"),
 }
 
+data class PlayerActionClick(
+    val action: String,
+    val value: Any? = null,
+)
+
 data class PlayersTabHitResult(
     val categoryClicked: PlayerCategory? = null,
     val refreshClicked: Boolean = false,
     val backClicked: Boolean = false,
     val playerUuidClicked: String? = null,
     val listBounds: dev.ilgax.venus.gui.tabs.Rect? = null,
+    val playerActionClicked: PlayerActionClick? = null,
 )
 
 data class Rect(
@@ -69,6 +75,10 @@ object PlayersTab {
         val headerRect = Rect(x, y, width, headerHeight)
 
         if (selectedUuid != null) {
+            val bodyY = y + headerHeight + gap
+            val bodyHeight = height - headerHeight - gap
+            val detailRect = Rect(x, bodyY, width, bodyHeight)
+            val detailContentRect = detailContentRect(detailRect)
             val backWidth = font.width("Back") + 16
             val backRect = Rect(headerRect.x + 4, headerRect.y + 4, backWidth, 20)
             if (inside(mouseX, mouseY, backRect)) {
@@ -80,6 +90,15 @@ object PlayersTab {
             if (inside(mouseX, mouseY, refreshRect) && SessionState.sessionActive) {
                 hitResult = hitResult.copy(refreshClicked = true)
             }
+
+            val detail = SessionState.latestPlayerDetail
+            if (detail != null && detail.uuid == selectedUuid) {
+                val actionClick = hitTestDetailPane(mouseX, mouseY, detailContentRect, detail)
+                if (actionClick != null) {
+                    hitResult = hitResult.copy(playerActionClicked = actionClick)
+                }
+            }
+
             return hitResult
         }
 
@@ -148,6 +167,7 @@ object PlayersTab {
         activeCategory: PlayerCategory,
         selectedUuid: String?,
         scrollOffset: Int,
+        pendingPlayerAction: String? = null,
     ) {
         val gap = 8
         val headerHeight = 28
@@ -157,12 +177,28 @@ object PlayersTab {
 
         val headerRect = Rect(x, y, width, headerHeight)
 
-        // Header Render
-        guiGraphics.fill(headerRect.x, headerRect.y, headerRect.x + headerRect.width, headerRect.y + headerRect.height, COLOR_CARD)
-        guiGraphics.renderOutline(headerRect.x, headerRect.y, headerRect.width, headerRect.height, COLOR_BORDER)
-
         if (selectedUuid != null) {
             // Render Detail View Fullscreen
+            val bodyY = y + headerHeight + gap
+            val bodyHeight = height - headerHeight - gap
+            val detailRect = Rect(x, bodyY, width, bodyHeight)
+            val detailContentRect = detailContentRect(detailRect)
+
+            guiGraphics.fill(
+                headerRect.x,
+                headerRect.y,
+                headerRect.x + headerRect.width,
+                headerRect.y + headerRect.height,
+                COLOR_CARD,
+            )
+            guiGraphics.renderOutline(
+                headerRect.x,
+                headerRect.y,
+                headerRect.width,
+                headerRect.height,
+                COLOR_BORDER,
+            )
+
             val backWidth = font.width("Back") + 16
             val backRect = Rect(headerRect.x + 4, headerRect.y + 4, backWidth, 20)
             val backHovered = inside(mouseX, mouseY, backRect)
@@ -216,22 +252,31 @@ object PlayersTab {
             // Crown
             if (isOp) {
                 drawCrown(guiGraphics, currentX, headerRect.y + 6)
+                currentX += 20
             }
 
-            val bodyY = y + headerHeight + gap
-            val bodyHeight = height - headerHeight - gap
-            val detailRect = Rect(x, bodyY, width, bodyHeight)
+            guiGraphics.drawString(font, selectedUuid, currentX, headerRect.y + 10, COLOR_DARK_MUTED, false)
 
-            guiGraphics.fill(detailRect.x, detailRect.y, detailRect.x + detailRect.width, detailRect.y + detailRect.height, COLOR_CARD)
+            guiGraphics.fill(
+                detailRect.x,
+                detailRect.y,
+                detailRect.x + detailRect.width,
+                detailRect.y + detailRect.height,
+                COLOR_CARD,
+            )
             guiGraphics.renderOutline(detailRect.x, detailRect.y, detailRect.width, detailRect.height, COLOR_BORDER)
 
             if (detail == null || detail.uuid != selectedUuid) {
                 drawCenteredString(guiGraphics, font, "Loading player details...", detailRect)
             } else {
-                renderDetailPane(guiGraphics, font, detailRect, detail)
+                renderDetailPane(guiGraphics, font, detailContentRect, detail, mouseX, mouseY, pendingPlayerAction)
             }
             return
         }
+
+        // Header Render
+        guiGraphics.fill(headerRect.x, headerRect.y, headerRect.x + headerRect.width, headerRect.y + headerRect.height, COLOR_CARD)
+        guiGraphics.renderOutline(headerRect.x, headerRect.y, headerRect.width, headerRect.height, COLOR_BORDER)
 
         // Pill
         val list = SessionState.latestPlayerList
@@ -370,92 +415,362 @@ object PlayersTab {
         }
     }
 
+    private fun detailContentRect(rect: Rect): Rect =
+        Rect(
+            rect.x + DETAIL_CONTENT_PADDING,
+            rect.y + DETAIL_CONTENT_PADDING,
+            maxOf(0, rect.width - DETAIL_CONTENT_PADDING * 2),
+            maxOf(0, rect.height - DETAIL_CONTENT_PADDING * 2),
+        )
+
+    private fun detailLayout(rect: Rect): DetailLayout {
+        val contentX = rect.x
+        val contentY = rect.y
+        val contentWidth = rect.width
+        val contentHeight = rect.height
+
+        val rightColWidth = maxOf(DETAIL_RIGHT_COLUMN_MIN_WIDTH, (contentWidth * DETAIL_RIGHT_COLUMN_PERCENT) / 100)
+        val leftAreaWidth = maxOf(0, contentWidth - DETAIL_SECTION_GAP - rightColWidth)
+        val topRowHeight = minOf(DETAIL_TOP_ROW_MAX_HEIGHT, maxOf(DETAIL_TOP_ROW_MIN_HEIGHT, contentHeight / 4))
+        val lowerRowY = contentY + topRowHeight + DETAIL_SECTION_GAP
+        val lowerRowHeight = maxOf(MIN_PLACEHOLDER_SECTION_HEIGHT, contentHeight - topRowHeight - DETAIL_SECTION_GAP)
+        val leftTopWidth = maxOf(0, leftAreaWidth - DETAIL_SECTION_GAP)
+        val healthWidth = (leftTopWidth * DETAIL_HEALTH_PERCENT_OF_LEFT_TOP) / 100
+        val gameModeWidth = leftTopWidth - healthWidth
+        val rightColX = contentX + leftAreaWidth + DETAIL_SECTION_GAP
+        val controlHeight =
+            minOf(
+                maxOf(CONTROL_SECTION_HEIGHT, topRowHeight + lowerRowHeight / 3),
+                maxOf(CONTROL_SECTION_HEIGHT, contentHeight - DETAIL_SECTION_GAP - INFORMATION_SECTION_MIN_HEIGHT),
+            )
+        val infoY = contentY + controlHeight + DETAIL_SECTION_GAP
+        val infoHeight = maxOf(INFORMATION_SECTION_MIN_HEIGHT, contentY + contentHeight - infoY)
+
+        return DetailLayout(
+            healthRect = Rect(contentX, contentY, healthWidth, topRowHeight),
+            gameModeRect = Rect(contentX + healthWidth + DETAIL_SECTION_GAP, contentY, gameModeWidth, topRowHeight),
+            controlRect = Rect(rightColX, contentY, rightColWidth, controlHeight),
+            inventoryRect = Rect(contentX, lowerRowY, leftAreaWidth, lowerRowHeight),
+            infoRect = Rect(rightColX, infoY, rightColWidth, infoHeight),
+        )
+    }
+
+    private data class DetailLayout(
+        val healthRect: Rect,
+        val gameModeRect: Rect,
+        val controlRect: Rect,
+        val inventoryRect: Rect,
+        val infoRect: Rect,
+    )
+
+    private fun healthActionRects(
+        x: Int,
+        y: Int,
+        width: Int,
+    ): Map<String, Rect> {
+        val btnWidth = (width - 16) / 3
+        return mapOf(
+            "heal" to Rect(x, y, btnWidth, 20),
+            "feed" to Rect(x + btnWidth + 8, y, btnWidth, 20),
+            "kill" to Rect(x + 2 * btnWidth + 16, y, btnWidth, 20),
+        )
+    }
+
+    private fun controlActionRects(
+        x: Int,
+        y: Int,
+        width: Int,
+    ): Map<String, Rect> =
+        mapOf(
+            "set_whitelisted" to Rect(x, y, width, 20),
+            "set_blocked" to Rect(x, y + 24, width, 20),
+            "set_operator" to Rect(x, y + 48, width, 20),
+        )
+
+    private fun gameModeRects(
+        x: Int,
+        y: Int,
+        width: Int,
+    ): Map<String, Rect> {
+        val btnWidth = (width - 24) / 4
+        return mapOf(
+            "survival" to Rect(x, y, btnWidth, 20),
+            "creative" to Rect(x + btnWidth + 8, y, btnWidth, 20),
+            "adventure" to Rect(x + 2 * btnWidth + 16, y, btnWidth, 20),
+            "spectator" to Rect(x + 3 * btnWidth + 24, y, btnWidth, 20),
+        )
+    }
+
+    private fun teleportRects(
+        x: Int,
+        y: Int,
+        width: Int,
+    ): Map<String, Rect> {
+        val btnWidth = (width - 8) / 2
+        return mapOf(
+            "teleport_admin_to_player" to Rect(x, y, btnWidth, 20),
+            "teleport_player_to_admin" to Rect(x + btnWidth + 8, y, btnWidth, 20),
+        )
+    }
+
+    private fun hitTestDetailPane(
+        mouseX: Int,
+        mouseY: Int,
+        rect: Rect,
+        detail: PlayerDetail,
+    ): PlayerActionClick? {
+        val layout = detailLayout(rect)
+
+        if (detail.online) {
+            val healthContentX = layout.healthRect.x + SECTION_PADDING
+            var healthContentY = layout.healthRect.y + SECTION_PADDING + 16
+            healthContentY += 28
+            val actions = healthActionRects(healthContentX, healthContentY, layout.healthRect.width - SECTION_PADDING * 2)
+            for ((action, btnRect) in actions) {
+                if (inside(mouseX, mouseY, btnRect)) return PlayerActionClick(action)
+            }
+
+            val gameModeContentX = layout.gameModeRect.x + SECTION_PADDING
+            val gameModeContentY = layout.gameModeRect.y + SECTION_PADDING + 32
+            val gmActions = gameModeRects(gameModeContentX, gameModeContentY, layout.gameModeRect.width - SECTION_PADDING * 2)
+            for ((mode, btnRect) in gmActions) {
+                if (inside(mouseX, mouseY, btnRect)) return PlayerActionClick("set_game_mode", mode)
+            }
+        }
+
+        val controlContentX = layout.controlRect.x + SECTION_PADDING
+        val controlContentY = layout.controlRect.y + SECTION_PADDING + 16
+        val controls = controlActionRects(controlContentX, controlContentY, layout.controlRect.width - SECTION_PADDING * 2)
+        for ((action, btnRect) in controls) {
+            if (inside(mouseX, mouseY, btnRect)) {
+                val value =
+                    when (action) {
+                        "set_whitelisted" -> !detail.whitelisted
+                        "set_blocked" -> !detail.blocked
+                        "set_operator" -> !detail.operator
+                        else -> false
+                    }
+                return PlayerActionClick(action, value)
+            }
+        }
+
+        if (detail.online) {
+            val infoContentX = layout.infoRect.x + SECTION_PADDING
+            val infoContentY = layout.infoRect.y + SECTION_PADDING + 44
+            val tpActions = teleportRects(infoContentX, infoContentY, layout.infoRect.width - SECTION_PADDING * 2)
+            for ((action, btnRect) in tpActions) {
+                if (inside(mouseX, mouseY, btnRect)) return PlayerActionClick(action)
+            }
+        }
+
+        return null
+    }
+
     private fun renderDetailPane(
         guiGraphics: GuiGraphics,
         font: Font,
         rect: Rect,
         detail: PlayerDetail,
+        mouseX: Int,
+        mouseY: Int,
+        pendingPlayerAction: String?,
     ) {
-        val pad = 12
-        var currentY = rect.y + pad
-        val maxY = rect.y + rect.height - pad
+        val layout = detailLayout(rect)
 
-        guiGraphics.drawString(font, detail.uuid, rect.x + pad, currentY, COLOR_MUTED, false)
-        currentY += 20
+        renderSectionBackground(guiGraphics, layout.healthRect)
+        renderSectionBackground(guiGraphics, layout.gameModeRect)
+        renderSectionBackground(guiGraphics, layout.controlRect)
+        renderSectionBackground(guiGraphics, layout.infoRect)
+        if (layout.inventoryRect.height > MIN_PLACEHOLDER_SECTION_HEIGHT) {
+            renderSectionBackground(guiGraphics, layout.inventoryRect)
+            drawCenteredString(guiGraphics, font, "Inventory placeholder", layout.inventoryRect, COLOR_MUTED)
+        }
 
-        val statusLines = mutableListOf<String>()
-        if (detail.online) statusLines.add("Online") else statusLines.add("Offline")
-        if (detail.operator) statusLines.add("Operator")
-        if (detail.whitelisted) statusLines.add("Whitelisted")
-        if (detail.blocked) statusLines.add("Blocked")
+        val healthContentX = layout.healthRect.x + SECTION_PADDING
+        var healthContentY = layout.healthRect.y + SECTION_PADDING
+        guiGraphics.drawString(font, "HP and XP", healthContentX, healthContentY, COLOR_TEXT, false)
+        healthContentY += 16
 
-        if (currentY + 8 > maxY) return
-        guiGraphics.drawString(font, "Status: ${statusLines.joinToString(", ")}", rect.x + pad, currentY, COLOR_TEXT, false)
-        currentY += 20
+        val gameModeContentX = layout.gameModeRect.x + SECTION_PADDING
+        var gameModeContentY = layout.gameModeRect.y + SECTION_PADDING
+        guiGraphics.drawString(font, "Game Mode", gameModeContentX, gameModeContentY, COLOR_TEXT, false)
+        gameModeContentY += 16
 
         if (detail.online) {
-            val gameMode = detail.gameMode
-            if (gameMode != null) {
-                if (currentY + 8 > maxY) return
-                guiGraphics.drawString(font, "Game Mode: $gameMode", rect.x + pad, currentY, COLOR_TEXT, false)
-                currentY += 16
+            val health = detail.health ?: 0.0
+            val maxHealth = detail.maxHealth ?: 20.0
+            val food = detail.foodLevel ?: 20
+            val level = detail.level ?: 0
+            val exp = (detail.experienceProgress ?: 0f) * 100
+            val healthText = "HP: ${String.format("%.1f", health)} / ${String.format("%.1f", maxHealth)}"
+
+            guiGraphics.drawString(
+                font,
+                healthText,
+                healthContentX,
+                healthContentY,
+                COLOR_MUTED,
+                false,
+            )
+            val hungerX = healthContentX + font.width(healthText) + 6
+            guiGraphics.drawString(font, "Hunger: $food", hungerX, healthContentY, COLOR_MUTED, false)
+            healthContentY += 12
+            guiGraphics.drawString(font, "Lvl: $level (${String.format("%.1f", exp)}%)", healthContentX, healthContentY, COLOR_MUTED, false)
+            healthContentY += 16
+
+            val actions = healthActionRects(healthContentX, healthContentY, layout.healthRect.width - SECTION_PADDING * 2)
+            for ((action, btnRect) in actions) {
+                val isPending = action == pendingPlayerAction
+                val hovered = inside(mouseX, mouseY, btnRect) && !isPending
+                val bg =
+                    if (isPending) {
+                        COLOR_DISABLED
+                    } else if (hovered) {
+                        COLOR_HOVER
+                    } else {
+                        COLOR_BUTTON
+                    }
+                val label = if (isPending) "Working..." else action.replaceFirstChar { it.uppercase() }
+
+                guiGraphics.fill(btnRect.x, btnRect.y, btnRect.x + btnRect.width, btnRect.y + btnRect.height, bg)
+                guiGraphics.renderOutline(btnRect.x, btnRect.y, btnRect.width, btnRect.height, COLOR_BORDER)
+                drawCenteredString(guiGraphics, font, label, btnRect, if (isPending) COLOR_MUTED else COLOR_TEXT)
             }
-            val health = detail.health
-            val maxHealth = detail.maxHealth
-            if (health != null && maxHealth != null) {
-                if (currentY + 8 > maxY) return
-                guiGraphics.drawString(
-                    font,
-                    "Health: ${String.format("%.1f", health)} / ${String.format("%.1f", maxHealth)}",
-                    rect.x + pad,
-                    currentY,
-                    COLOR_TEXT,
-                    false,
-                )
-                currentY += 16
+
+            guiGraphics.drawString(font, detail.gameMode ?: "Unknown", gameModeContentX, gameModeContentY, COLOR_MUTED, false)
+            gameModeContentY += 16
+            val gmActions = gameModeRects(gameModeContentX, gameModeContentY, layout.gameModeRect.width - SECTION_PADDING * 2)
+            for ((mode, btnRect) in gmActions) {
+                val isPending = "set_game_mode" == pendingPlayerAction
+                val hovered = inside(mouseX, mouseY, btnRect) && !isPending
+                val active = detail.gameMode == mode
+                val bg =
+                    if (isPending) {
+                        COLOR_DISABLED
+                    } else if (active) {
+                        COLOR_ACTIVE_TAB
+                    } else if (hovered) {
+                        COLOR_HOVER
+                    } else {
+                        COLOR_BUTTON
+                    }
+
+                guiGraphics.fill(btnRect.x, btnRect.y, btnRect.x + btnRect.width, btnRect.y + btnRect.height, bg)
+                guiGraphics.renderOutline(btnRect.x, btnRect.y, btnRect.width, btnRect.height, COLOR_BORDER)
+                val shortMode =
+                    when (mode) {
+                        "survival" -> "S"
+                        "creative" -> "C"
+                        "adventure" -> "A"
+                        "spectator" -> "SP"
+                        else -> "?"
+                    }
+                drawCenteredString(guiGraphics, font, shortMode, btnRect, if (isPending) COLOR_MUTED else COLOR_TEXT)
             }
-            val foodLevel = detail.foodLevel
-            if (foodLevel != null) {
-                if (currentY + 8 > maxY) return
-                guiGraphics.drawString(font, "Food: $foodLevel", rect.x + pad, currentY, COLOR_TEXT, false)
-                currentY += 16
-            }
-            val level = detail.level
-            val experienceProgress = detail.experienceProgress
-            if (level != null && experienceProgress != null) {
-                if (currentY + 8 > maxY) return
-                guiGraphics.drawString(
-                    font,
-                    "Level: $level (${String.format("%.1f", experienceProgress * 100)}%)",
-                    rect.x + pad,
-                    currentY,
-                    COLOR_TEXT,
-                    false,
-                )
-                currentY += 16
-            }
-            val world = detail.world
-            if (world != null) {
-                if (currentY + 8 > maxY) return
-                guiGraphics.drawString(font, "World: $world", rect.x + pad, currentY, COLOR_TEXT, false)
-                currentY += 16
-            }
-            val x = detail.x
-            val y = detail.y
-            val z = detail.z
-            if (x != null && y != null && z != null) {
-                if (currentY + 8 > maxY) return
-                guiGraphics.drawString(
-                    font,
-                    "Position: ${x.toInt()}, ${y.toInt()}, ${z.toInt()}",
-                    rect.x + pad,
-                    currentY,
-                    COLOR_TEXT,
-                    false,
-                )
-                currentY += 16
-            }
+        } else {
+            guiGraphics.drawString(font, "Player is offline", healthContentX, healthContentY, COLOR_MUTED, false)
         }
+
+        val controlContentX = layout.controlRect.x + SECTION_PADDING
+        var controlContentY = layout.controlRect.y + SECTION_PADDING
+        guiGraphics.drawString(font, "Control", controlContentX, controlContentY, COLOR_TEXT, false)
+        controlContentY += 16
+
+        val controls = controlActionRects(controlContentX, controlContentY, layout.controlRect.width - SECTION_PADDING * 2)
+        for ((action, btnRect) in controls) {
+            val isPending = action == pendingPlayerAction
+            val hovered = inside(mouseX, mouseY, btnRect) && !isPending
+            val bg = if (hovered) COLOR_HOVER else COLOR_CARD
+            val label =
+                when (action) {
+                    "set_whitelisted" -> "Whitelisted"
+                    "set_blocked" -> "Banned"
+                    "set_operator" -> "Operator"
+                    else -> action
+                }
+            val isChecked =
+                when (action) {
+                    "set_whitelisted" -> detail.whitelisted
+                    "set_blocked" -> detail.blocked
+                    "set_operator" -> detail.operator
+                    else -> false
+                }
+
+            if (hovered) {
+                guiGraphics.fill(btnRect.x, btnRect.y, btnRect.x + btnRect.width, btnRect.y + btnRect.height, bg)
+            }
+
+            val boxRect = Rect(btnRect.x, btnRect.y + 2, 16, 16)
+            guiGraphics.fill(boxRect.x, boxRect.y, boxRect.x + boxRect.width, boxRect.y + boxRect.height, COLOR_BUTTON)
+            guiGraphics.renderOutline(boxRect.x, boxRect.y, boxRect.width, boxRect.height, COLOR_BORDER)
+            if (isPending) {
+                drawCenteredString(guiGraphics, font, "-", boxRect, COLOR_MUTED)
+            } else if (isChecked) {
+                drawCenteredString(guiGraphics, font, "Y", boxRect, COLOR_OK)
+            } else {
+                drawCenteredString(guiGraphics, font, "N", boxRect, COLOR_BAD)
+            }
+
+            guiGraphics.drawString(
+                font,
+                label,
+                boxRect.x + 24,
+                btnRect.y + 6,
+                if (isPending) COLOR_MUTED else COLOR_TEXT,
+                false,
+            )
+        }
+
+        val infoContentX = layout.infoRect.x + SECTION_PADDING
+        var currInfoY = layout.infoRect.y + SECTION_PADDING
+        guiGraphics.drawString(font, "Information", infoContentX, currInfoY, COLOR_TEXT, false)
+        currInfoY += 16
+
+        if (detail.online) {
+            val world = detail.world ?: "Unknown"
+            val dx = detail.x
+            val dy = detail.y
+            val dz = detail.z
+            val pos =
+                if (dx != null && dy != null && dz != null) {
+                    "${dx.toInt()}, ${dy.toInt()}, ${dz.toInt()}"
+                } else {
+                    "Unknown"
+                }
+            guiGraphics.drawString(font, "World: $world", infoContentX, currInfoY, COLOR_MUTED, false)
+            currInfoY += 12
+            guiGraphics.drawString(font, "Pos: $pos", infoContentX, currInfoY, COLOR_MUTED, false)
+            currInfoY += 16
+
+            val tpActions = teleportRects(infoContentX, currInfoY, layout.infoRect.width - SECTION_PADDING * 2)
+            for ((action, btnRect) in tpActions) {
+                val isPending = action == pendingPlayerAction
+                val hovered = inside(mouseX, mouseY, btnRect) && !isPending
+                val bg =
+                    if (isPending) {
+                        COLOR_DISABLED
+                    } else if (hovered) {
+                        COLOR_HOVER
+                    } else {
+                        COLOR_BUTTON
+                    }
+                val label = if (action == "teleport_admin_to_player") "TP To" else "Bring"
+
+                guiGraphics.fill(btnRect.x, btnRect.y, btnRect.x + btnRect.width, btnRect.y + btnRect.height, bg)
+                guiGraphics.renderOutline(btnRect.x, btnRect.y, btnRect.width, btnRect.height, COLOR_BORDER)
+                drawCenteredString(guiGraphics, font, if (isPending) "..." else label, btnRect, if (isPending) COLOR_MUTED else COLOR_TEXT)
+            }
+        } else {
+            guiGraphics.drawString(font, "Position unavailable", infoContentX, currInfoY, COLOR_MUTED, false)
+        }
+    }
+
+    private fun renderSectionBackground(
+        guiGraphics: GuiGraphics,
+        rect: Rect,
+    ) {
+        guiGraphics.fill(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height, COLOR_CARD)
+        guiGraphics.renderOutline(rect.x, rect.y, rect.width, rect.height, COLOR_BORDER)
     }
 
     fun maxScrollOffset(
@@ -472,6 +787,7 @@ object PlayersTab {
         font: Font,
         text: String,
         rect: Rect,
+        color: Int = COLOR_MUTED,
     ) {
         val width = font.width(text)
         guiGraphics.drawString(
@@ -479,7 +795,7 @@ object PlayersTab {
             text,
             rect.x + (rect.width - width) / 2,
             rect.y + (rect.height - font.lineHeight) / 2,
-            COLOR_MUTED,
+            color,
             false,
         )
     }
@@ -523,6 +839,7 @@ object PlayersTab {
     private const val COLOR_BORDER = 0xFF2A2E36.toInt()
     private const val COLOR_TEXT = 0xFFF4F7FA.toInt()
     private const val COLOR_MUTED = 0xFFA1A7B3.toInt()
+    private const val COLOR_DARK_MUTED = 0xFF4A5562.toInt()
     private const val COLOR_ACTIVE_TAB = 0xFF2F6F85.toInt()
     private const val COLOR_BUTTON = 0xFF222B35.toInt()
     private const val COLOR_HOVER = 0xFF334150.toInt()
@@ -534,6 +851,18 @@ object PlayersTab {
     private const val COLOR_WHITELIST = 0xFFFFFFFF.toInt()
     private const val COLOR_BAD = 0xFFFF4D64.toInt()
 
+    private const val DETAIL_CONTENT_PADDING = 12
+    private const val DETAIL_SECTION_GAP = 12
+    private const val DETAIL_RIGHT_COLUMN_MIN_WIDTH = 160
+    private const val DETAIL_RIGHT_COLUMN_PERCENT = 28
+    private const val DETAIL_HEALTH_PERCENT_OF_LEFT_TOP = 58
+    private const val DETAIL_TOP_ROW_MIN_HEIGHT = 80
+    private const val DETAIL_TOP_ROW_MAX_HEIGHT = 96
+    private const val SECTION_PADDING = 8
+    private const val MIN_PLACEHOLDER_SECTION_HEIGHT = 32
+    private const val CONTROL_SECTION_HEIGHT = 92
+    private const val INFORMATION_SECTION_MIN_HEIGHT = 88
+    private const val OFFLINE_INFORMATION_SECTION_HEIGHT = 44
     private const val CROWN_RENDER_SIZE = 16
     private const val CROWN_TEXTURE_SIZE = 64
     private val CROWN_TEXTURE = Identifier.fromNamespaceAndPath("venus", "textures/gui/crown.png")

@@ -58,6 +58,13 @@ object PanelKeybind {
                     subscribeLogs = channelClient::sendLogSubscribe,
                     requestPlayerList = channelClient::sendPlayerListGet,
                     requestPlayerDetail = channelClient::sendPlayerDetailGet,
+                    sendPlayerAction = { uuid, action, value ->
+                        when (value) {
+                            is Boolean -> channelClient.sendPlayerAction(uuid, action, value)
+                            is String -> channelClient.sendPlayerAction(uuid, action, value)
+                            else -> channelClient.sendPlayerAction(uuid, action, null)
+                        }
+                    },
                 ),
             )
         }

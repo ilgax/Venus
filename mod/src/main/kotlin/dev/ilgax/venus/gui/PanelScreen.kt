@@ -19,11 +19,13 @@ class PanelScreen(
     private val subscribeLogs: () -> Unit,
     private val requestPlayerList: () -> Unit,
     private val requestPlayerDetail: (String) -> Unit,
+    private val sendPlayerAction: (String, String, Any?) -> Unit,
 ) : Screen(Component.translatable("screen.venus.panel")) {
     private var activeTab = PanelTab.OVERVIEW
     private var hasRequestedPlayersList = false
     private var selectedPlayerCategory = PlayerCategory.ONLINE
     private var selectedPlayerUuid: String? = null
+    private var pendingPlayerAction: String? = null
     private var playersScrollOffset = 0
     private var logsSubscribed = false
     private var consoleScrollOffset = 0
@@ -279,6 +281,16 @@ class PanelScreen(
                 return true
             }
 
+            if (hit.playerActionClicked != null) {
+                if (SessionState.sessionActive && selectedPlayerUuid != null) {
+                    val action = hit.playerActionClicked.action
+                    val value = hit.playerActionClicked.value
+                    sendPlayerAction(selectedPlayerUuid!!, action, value)
+                    pendingPlayerAction = action
+                }
+                return true
+            }
+
             if (hit.categoryClicked != null && hit.categoryClicked != selectedPlayerCategory) {
                 selectedPlayerCategory = hit.categoryClicked
                 val list = SessionState.latestPlayerList
@@ -357,6 +369,10 @@ class PanelScreen(
                     hasRequestedPlayersList = true
                 }
 
+                if (SessionState.latestPlayerActionResult?.action == pendingPlayerAction) {
+                    pendingPlayerAction = null
+                }
+
                 val list = SessionState.latestPlayerList
                 if (list != null) {
                     val players = PlayersTab.playersForCategory(list, selectedPlayerCategory)
@@ -376,6 +392,7 @@ class PanelScreen(
                     selectedPlayerCategory,
                     selectedPlayerUuid,
                     playersScrollOffset,
+                    pendingPlayerAction,
                 )
             }
 
@@ -553,7 +570,6 @@ class PanelScreen(
         val panelX = panelPadding
         val panelY = panelPadding
         val panelWidth = width - panelPadding * 2
-        val panelHeight = height - panelPadding * 2
         val navX = panelX + 12
         val navY = panelY + headerHeight()
         val navWidth = navWidth()

@@ -13,10 +13,13 @@ import dev.ilgax.venus.protocol.ClientKeyPacket
 import dev.ilgax.venus.protocol.ConsoleCmdPacket
 import dev.ilgax.venus.protocol.ConsoleLogSubscribePacket
 import dev.ilgax.venus.protocol.ErrorPacket
+import dev.ilgax.venus.protocol.PlayerActionPacket
 import dev.ilgax.venus.protocol.PlayerDetailGetPacket
 import dev.ilgax.venus.protocol.PlayerListGetPacket
 import dev.ilgax.venus.protocol.ServerKeyPacket
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry
 import net.minecraft.client.Minecraft
@@ -26,6 +29,7 @@ import net.minecraft.network.codec.StreamCodec
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload
 import net.minecraft.resources.Identifier
 import java.util.Base64
+import java.util.UUID
 
 class ChannelClient(
     private val json: Json,
@@ -171,6 +175,44 @@ class ChannelClient(
                 PlayerDetailGetPacket(type = "player_detail_get", uuid = uuid),
             )
         sendCommand(data)
+    }
+
+    fun sendPlayerAction(
+        uuid: String,
+        action: String,
+        value: JsonElement? = null,
+    ) {
+        val data =
+            json.encodeToString(
+                PlayerActionPacket.serializer(),
+                PlayerActionPacket(
+                    type = "player_action",
+                    requestId =
+                        UUID
+                            .randomUUID()
+                            .toString(),
+                    uuid = uuid,
+                    action = action,
+                    value = value,
+                ),
+            )
+        sendCommand(data)
+    }
+
+    fun sendPlayerAction(
+        uuid: String,
+        action: String,
+        value: Boolean,
+    ) {
+        sendPlayerAction(uuid, action, JsonPrimitive(value))
+    }
+
+    fun sendPlayerAction(
+        uuid: String,
+        action: String,
+        value: String,
+    ) {
+        sendPlayerAction(uuid, action, JsonPrimitive(value))
     }
 
     private fun handleServerKey(data: String) {

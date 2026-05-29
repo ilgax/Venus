@@ -21,6 +21,7 @@ internal enum class CommandRoute(
     STAT_GET("stat_get"),
     PLAYER_LIST_GET("player_list_get"),
     PLAYER_DETAIL_GET("player_detail_get"),
+    PLAYER_ACTION("player_action"),
     ;
 
     companion object {
@@ -66,6 +67,7 @@ class PacketRouter(
             CommandRoute.STAT_GET -> statsHandler.handleGet(player, data)
             CommandRoute.PLAYER_LIST_GET -> playersHandler.handleListGet(player, data)
             CommandRoute.PLAYER_DETAIL_GET -> playersHandler.handleDetailGet(player, data)
+            CommandRoute.PLAYER_ACTION -> playersHandler.handleAction(player, data)
             null -> plugin.logger.warning("${player.name} sent unknown cmd packet type: $type")
         }
     }
