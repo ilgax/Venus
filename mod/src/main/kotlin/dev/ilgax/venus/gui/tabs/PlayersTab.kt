@@ -27,7 +27,7 @@ data class PlayersTabHitResult(
     val refreshClicked: Boolean = false,
     val backClicked: Boolean = false,
     val playerUuidClicked: String? = null,
-    val listBounds: dev.ilgax.venus.gui.tabs.Rect? = null,
+    val listBounds: Rect? = null,
     val playerActionClicked: PlayerActionClick? = null,
 )
 
@@ -171,9 +171,6 @@ object PlayersTab {
     ) {
         val gap = 8
         val headerHeight = 28
-        val isCompact = width < 500
-        val detailWidth = if (isCompact) width else (width * 0.4).toInt()
-        val listWidth = if (isCompact) width else width - detailWidth - gap
 
         val headerRect = Rect(x, y, width, headerHeight)
 
@@ -386,12 +383,9 @@ object PlayersTab {
                     val rowRect = Rect(listRect.x + 2, rowY, listRect.width - 4, rowHeight)
 
                     val hovered = inside(mouseX, mouseY, rowRect) && inside(mouseX, mouseY, listRect)
-                    val selected = player.uuid == selectedUuid
 
                     val bgColor =
-                        if (selected) {
-                            COLOR_ACTIVE_ROW
-                        } else if (hovered) {
+                        if (hovered) {
                             COLOR_HOVER
                         } else {
                             COLOR_CARD
@@ -844,11 +838,8 @@ object PlayersTab {
     private const val COLOR_BUTTON = 0xFF222B35.toInt()
     private const val COLOR_HOVER = 0xFF334150.toInt()
     private const val COLOR_DISABLED = 0xFF151A20.toInt()
-    private const val COLOR_ACTIVE_ROW = 0xFF1E2A38.toInt()
     private const val COLOR_ONLINE = 0xFF10D39E.toInt()
-    private const val COLOR_OP = 0xFFFFC107.toInt()
     private const val COLOR_OK = 0xFF10D39E.toInt()
-    private const val COLOR_WHITELIST = 0xFFFFFFFF.toInt()
     private const val COLOR_BAD = 0xFFFF4D64.toInt()
 
     private const val DETAIL_CONTENT_PADDING = 12
@@ -862,7 +853,6 @@ object PlayersTab {
     private const val MIN_PLACEHOLDER_SECTION_HEIGHT = 32
     private const val CONTROL_SECTION_HEIGHT = 92
     private const val INFORMATION_SECTION_MIN_HEIGHT = 88
-    private const val OFFLINE_INFORMATION_SECTION_HEIGHT = 44
     private const val CROWN_RENDER_SIZE = 16
     private const val CROWN_TEXTURE_SIZE = 64
     private val CROWN_TEXTURE = Identifier.fromNamespaceAndPath("venus", "textures/gui/crown.png")
