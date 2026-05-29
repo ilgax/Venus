@@ -47,6 +47,7 @@ class AuthHandlerTest {
     private lateinit var sendKeyCalls: MutableList<String>
     private lateinit var sendAuthCalls: MutableList<String>
     private lateinit var sendReadyCalls: MutableList<String>
+    private lateinit var sendErrorCalls: MutableList<String>
 
     private lateinit var handler: AuthHandler
     private lateinit var clientKeyPair: KeyPair
@@ -83,6 +84,7 @@ class AuthHandlerTest {
         sendKeyCalls = mutableListOf()
         sendAuthCalls = mutableListOf()
         sendReadyCalls = mutableListOf()
+        sendErrorCalls = mutableListOf()
 
         mockkObject(SessionManager)
         mockkObject(AuthorizedKeys)
@@ -109,6 +111,7 @@ class AuthHandlerTest {
                 { _, data -> sendKeyCalls.add(data) },
                 { _, data -> sendAuthCalls.add(data) },
                 { _, data -> sendReadyCalls.add(data) },
+                { _, data -> sendErrorCalls.add(data) },
             )
     }
 
@@ -161,6 +164,21 @@ class AuthHandlerTest {
     }
 
     @Test
+    fun `handleClientKey with max users sends auth max users error`() {
+        val clientPubB64 = Base64.getEncoder().encodeToString(clientKeyPair.public.encoded)
+        val packet = ClientKeyPacket(type = "client_key", publicKey = clientPubB64)
+        val data = Json.encodeToString(ClientKeyPacket.serializer(), packet)
+
+        every { AuthorizedKeys.isAuthorized(clientPubB64) } returns false
+        every { AuthorizedKeys.count() } returns VenusConfig.maxUsers
+
+        handler.handleClientKey(player, data)
+
+        val errorPacket = json.decodeFromString<ErrorPacket>(sendErrorCalls.single())
+        assertEquals("auth_max_users", errorPacket.reason)
+    }
+
+    @Test
     fun `handleAuthResponse successful response activates session`() {
         val challengeBytes = Handshake.generateChallenge()
         val pendingSession = PendingSession(clientKeyPair.public, challengeBytes)
@@ -182,6 +200,41 @@ class AuthHandlerTest {
         assertEquals(1, sendReadyCalls.size)
         verify { SessionManager.activate(uuid, clientKeyPair.public) }
         verify { SessionManager.removePending(uuid) }
+    }
+
+    @Test
+    fun `handleAuthResponse invalid signature sends auth invalid response error`() {
+        val challengeBytes = Handshake.generateChallenge()
+        val pendingSession = PendingSession(clientKeyPair.public, challengeBytes)
+        every { SessionManager.getPending(uuid) } returns pendingSession
+        every { SessionManager.removePending(uuid) } returns null
+
+        val otherKeyPair =
+            java.security.KeyPairGenerator
+                .getInstance("Ed25519")
+                .generateKeyPair()
+        val clientSigBytes = Handshake.sign(challengeBytes, otherKeyPair.private)
+        val packet =
+            AuthResponsePacket(
+                type = "auth_response",
+                challenge = Base64.getEncoder().encodeToString(challengeBytes),
+                clientSignature = Base64.getEncoder().encodeToString(clientSigBytes),
+            )
+        val data = Json.encodeToString(AuthResponsePacket.serializer(), packet)
+
+        handler.handleAuthResponse(player, data)
+
+        val errorPacket = json.decodeFromString<ErrorPacket>(sendErrorCalls.single())
+        assertEquals("auth_invalid_response", errorPacket.reason)
+        verify { SessionManager.removePending(uuid) }
+    }
+
+    @Test
+    fun `notifyDenied sends auth denied error`() {
+        handler.notifyDenied(player)
+
+        val errorPacket = json.decodeFromString<ErrorPacket>(sendErrorCalls.single())
+        assertEquals("auth_denied", errorPacket.reason)
     }
 
     @Test

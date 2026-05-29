@@ -121,15 +121,18 @@ class VenusCommandTest {
     fun `deny with pending request removes it`() {
         val uuid = UUID.randomUUID()
         val approval = mockk<dev.ilgax.venus.auth.PendingApproval>()
+        val player = mockk<Player>(relaxed = true)
         every { stack.sender } returns consoleSender
         every { SessionManager.getNextPendingApproval() } returns java.util.AbstractMap.SimpleEntry(uuid, approval)
-        every { server.getPlayer(uuid) } returns null
+        every { server.getPlayer(uuid) } returns player
+        every { player.name } returns "DeniedPlayer"
         every { SessionManager.removePendingApproval(uuid) } returns approval
 
         command.execute(stack, arrayOf("deny"))
 
         verify { SessionManager.removePendingApproval(uuid) }
-        verify { consoleSender.sendMessage("$uuid denied.") }
+        verify { authHandler.notifyDenied(player) }
+        verify { consoleSender.sendMessage("DeniedPlayer denied.") }
     }
 
     @Test

@@ -2,6 +2,7 @@ package dev.ilgax.venus.channel
 
 import dev.ilgax.venus.protocol.CmdResponsePacket
 import dev.ilgax.venus.protocol.ConsoleLogPacket
+import dev.ilgax.venus.protocol.ErrorPacket
 import dev.ilgax.venus.protocol.ReadyPacket
 import dev.ilgax.venus.protocol.StatSubscribePacket
 import dev.ilgax.venus.protocol.StatsPacket
@@ -14,6 +15,8 @@ class PacketHandler(
     private val json: Json,
     private val sendCommand: (String) -> Unit,
     private val log: (String) -> Unit = ::println,
+    private val showAuthSuccess: () -> Unit = {},
+    private val showAuthFailure: (String) -> Unit = {},
 ) {
     fun handleReady(data: String) {
         val packet =
@@ -29,6 +32,7 @@ class PacketHandler(
         }
 
         SessionState.activate()
+        showAuthSuccess()
         log("Venus: session ready")
         val subscription =
             json.encodeToString(
@@ -60,6 +64,22 @@ class PacketHandler(
             "cmd_response" -> handleCommandResponse(data)
             else -> log("Venus: unexpected data packet type: $type")
         }
+    }
+
+    fun handleError(data: String) {
+        val packet =
+            try {
+                json.decodeFromString(ErrorPacket.serializer(), data)
+            } catch (e: Exception) {
+                log("Venus: invalid error packet - ${e.message}")
+                return
+            }
+        if (packet.type != "error") {
+            log("Venus: unexpected error packet type: ${packet.type}")
+            return
+        }
+        showAuthFailure(authFailureMessage(packet.reason))
+        log("Venus: auth failed - ${packet.reason}")
     }
 
     private fun handleStats(data: String) {
@@ -94,4 +114,13 @@ class PacketHandler(
             }
         SessionState.addConsoleLines(packet.lines)
     }
+
+    private fun authFailureMessage(reason: String): String =
+        when (reason) {
+            "auth_denied" -> "Server denied access."
+            "auth_timeout" -> "Server approval timed out."
+            "auth_max_users" -> "Server reached max users."
+            "auth_invalid_response" -> "Server rejected auth response."
+            else -> reason.replace('_', ' ').replaceFirstChar { it.uppercase() }
+        }
 }

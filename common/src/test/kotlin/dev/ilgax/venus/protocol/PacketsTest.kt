@@ -53,6 +53,10 @@ class PacketsTest {
             """{"type":"ready"}""",
             json.encodeToString(ReadyPacket(type = "ready")),
         )
+        assertEquals(
+            """{"type":"error","reason":"auth_denied"}""",
+            json.encodeToString(ErrorPacket(type = "error", reason = "auth_denied")),
+        )
     }
 
     @Test

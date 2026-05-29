@@ -57,6 +57,7 @@ class VenusPlugin :
                 sendKey = { player, data -> sendPayloadToPlayer(player, "key", data) },
                 sendAuth = { player, data -> sendPayloadToPlayer(player, "auth", data) },
                 sendReady = { player, data -> sendPayloadToPlayer(player, "ready", data) },
+                sendError = { player, data -> sendPayloadToPlayer(player, "error", data) },
             )
         channelListener = ChannelListener(authHandler, packetRouter)
         logHandler.start()

@@ -79,8 +79,12 @@ class VenusCommand(
             return
         }
         val (uuid, _) = entry
-        val playerName = plugin.server.getPlayer(uuid)?.name ?: uuid.toString()
+        val player = plugin.server.getPlayer(uuid)
+        val playerName = player?.name ?: uuid.toString()
         SessionManager.removePendingApproval(uuid)
+        if (player != null) {
+            authHandler.notifyDenied(player)
+        }
         sender.sendMessage("$playerName denied.")
     }
 }

@@ -2,6 +2,7 @@ package dev.ilgax.venus.channel
 
 import dev.ilgax.venus.protocol.CmdResponsePacket
 import dev.ilgax.venus.protocol.ConsoleLogPacket
+import dev.ilgax.venus.protocol.ErrorPacket
 import dev.ilgax.venus.protocol.ReadyPacket
 import dev.ilgax.venus.protocol.StatSubscribePacket
 import dev.ilgax.venus.protocol.StatsPacket
@@ -25,11 +26,13 @@ class PacketHandlerTest {
     @Test
     fun `ready activates session and sends shared subscription packet`() {
         val sent = mutableListOf<String>()
-        val handler = PacketHandler(json, sent::add) {}
+        var successToasts = 0
+        val handler = PacketHandler(json, sent::add, {}, { successToasts++ })
 
         handler.handleReady(json.encodeToString(ReadyPacket.serializer(), ReadyPacket("ready")))
 
         assertTrue(SessionState.sessionActive)
+        assertEquals(1, successToasts)
         val subscription = json.decodeFromString(StatSubscribePacket.serializer(), sent.single())
         assertEquals("stat_subscribe", subscription.type)
         assertEquals(1, subscription.intervalSeconds)
@@ -66,13 +69,15 @@ class PacketHandlerTest {
     @Test
     fun `invalid and unexpected ready packets do not activate session or subscribe`() {
         val sent = mutableListOf<String>()
-        val handler = PacketHandler(json, sent::add) {}
+        var successToasts = 0
+        val handler = PacketHandler(json, sent::add, {}, { successToasts++ })
 
         handler.handleReady("""{"type":"stats"}""")
         handler.handleReady("""{"type":""")
 
         assertFalse(SessionState.sessionActive)
         assertTrue(sent.isEmpty())
+        assertEquals(0, successToasts)
     }
 
     @Test
@@ -90,6 +95,28 @@ class PacketHandlerTest {
 
         assertEquals(stats, SessionState.latestStats)
         assertEquals(listOf(response), SessionState.commandResponses)
+    }
+
+    @Test
+    fun `error packet shows auth failure toast without activating session`() {
+        val failures = mutableListOf<String>()
+        val handler = PacketHandler(json, {}, {}, {}, failures::add)
+
+        handler.handleError(json.encodeToString(ErrorPacket.serializer(), ErrorPacket("error", "auth_denied")))
+
+        assertEquals(listOf("Server denied access."), failures)
+        assertFalse(SessionState.sessionActive)
+    }
+
+    @Test
+    fun `invalid error packet does not show auth failure toast`() {
+        val failures = mutableListOf<String>()
+        val handler = PacketHandler(json, {}, {}, {}, failures::add)
+
+        handler.handleError("""{"type":"ready"}""")
+        handler.handleError("""{"type":"""")
+
+        assertTrue(failures.isEmpty())
     }
 
     @Test

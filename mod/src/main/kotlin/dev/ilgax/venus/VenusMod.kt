@@ -4,6 +4,7 @@ import dev.ilgax.venus.auth.KeyManager
 import dev.ilgax.venus.auth.ServerKeyStore
 import dev.ilgax.venus.channel.ChannelClient
 import dev.ilgax.venus.channel.PacketHandler
+import dev.ilgax.venus.gui.AuthToasts
 import dev.ilgax.venus.keybind.PanelKeybind
 import dev.ilgax.venus.state.SessionState
 import kotlinx.serialization.json.Json
@@ -27,8 +28,8 @@ class VenusMod : ClientModInitializer {
 
         val json = Json { ignoreUnknownKeys = true }
         val log: (String) -> Unit = { LOGGER.info(it) }
-        channelClient = ChannelClient(json, keyManager, log)
-        val packetHandler = PacketHandler(json, channelClient::sendCommand, log)
+        channelClient = ChannelClient(json, keyManager, log, AuthToasts::failure)
+        val packetHandler = PacketHandler(json, channelClient::sendCommand, log, AuthToasts::success, AuthToasts::failure)
         channelClient.register(packetHandler)
         PanelKeybind.register(channelClient)
 

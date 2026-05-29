@@ -29,6 +29,7 @@ class ChannelClient(
     private val json: Json,
     private val keyManager: KeyManager,
     private val log: (String) -> Unit,
+    private val showAuthFailure: (String) -> Unit = {},
 ) {
     data object HelloPayload : CustomPacketPayload {
         val TYPE =
@@ -103,6 +104,7 @@ class ChannelClient(
         PayloadTypeRegistry.playC2S().register(AuthResponsePayload.TYPE, AuthResponsePayload.CODEC)
         PayloadTypeRegistry.playC2S().register(ErrorPayload.TYPE, ErrorPayload.CODEC)
         PayloadTypeRegistry.playC2S().register(CmdPayload.TYPE, CmdPayload.CODEC)
+        PayloadTypeRegistry.playS2C().register(ErrorPayload.TYPE, ErrorPayload.CODEC)
         PayloadTypeRegistry.playS2C().register(VenusRawPayload.TYPE, VenusRawPayload.CODEC)
         PayloadTypeRegistry.playS2C().register(VenusRawAuthPayload.TYPE, VenusRawAuthPayload.CODEC)
         PayloadTypeRegistry.playS2C().register(VenusRawReadyPayload.TYPE, VenusRawReadyPayload.CODEC)
@@ -119,6 +121,9 @@ class ChannelClient(
         }
         ClientPlayNetworking.registerGlobalReceiver(VenusRawDataPayload.TYPE) { payload, _ ->
             packetHandler.handleData(payload.bytes().toString(Charsets.UTF_8))
+        }
+        ClientPlayNetworking.registerGlobalReceiver(ErrorPayload.TYPE) { payload, _ ->
+            packetHandler.handleError(payload.data)
         }
     }
 
@@ -153,18 +158,21 @@ class ChannelClient(
             try {
                 json.decodeFromString(ServerKeyPacket.serializer(), data)
             } catch (e: Exception) {
-                log("Venus: invalid server key packet - ${e.message}")
+                failAuth("Invalid server key packet.", "Venus: invalid server key packet - ${e.message}")
                 return
             }
         if (packet.type != "server_key") {
-            log("Venus: unexpected server key packet type: ${packet.type}")
+            failAuth(
+                "Unexpected server key packet.",
+                "Venus: unexpected server key packet type: ${packet.type}",
+            )
             return
         }
         val serverKeyBase64 = packet.publicKey
 
         val identity =
             getServerAddress() ?: run {
-                log("Venus: could not determine server address")
+                failAuth("Could not determine server address.", "Venus: could not determine server address")
                 return
             }
         val storedKey = ServerKeyStore.getStoredKey(identity)
@@ -172,7 +180,7 @@ class ChannelClient(
             log("Venus: first connection to $identity")
             ServerKeyStore.storeKey(identity, serverKeyBase64)
         } else if (storedKey != serverKeyBase64) {
-            log("Venus: WARNING server key mismatch for $identity")
+            failAuth("Server key mismatch.", "Venus: WARNING server key mismatch for $identity")
             sendError("mitm_key_mismatch")
             return
         }
@@ -190,41 +198,50 @@ class ChannelClient(
             try {
                 json.decodeFromString(AuthChallengePacket.serializer(), data)
             } catch (e: Exception) {
-                log("Venus: invalid auth challenge packet - ${e.message}")
+                failAuth("Invalid auth challenge packet.", "Venus: invalid auth challenge packet - ${e.message}")
                 return
             }
         if (packet.type != "auth_challenge") {
-            log("Venus: unexpected auth challenge packet type: ${packet.type}")
+            failAuth(
+                "Unexpected auth challenge packet.",
+                "Venus: unexpected auth challenge packet type: ${packet.type}",
+            )
             return
         }
         val challenge =
             try {
                 Base64.getDecoder().decode(packet.challenge)
             } catch (_: IllegalArgumentException) {
-                log("Venus: invalid Base64 in auth challenge")
+                failAuth("Invalid auth challenge.", "Venus: invalid Base64 in auth challenge")
                 return
             }
         val serverSig =
             try {
                 Base64.getDecoder().decode(packet.serverSignature)
             } catch (_: IllegalArgumentException) {
-                log("Venus: invalid Base64 in auth signature")
+                failAuth("Invalid auth signature.", "Venus: invalid Base64 in auth signature")
                 return
             }
 
         val identity =
             getServerAddress() ?: run {
-                log("Venus: could not determine server address")
+                failAuth("Could not determine server address.", "Venus: could not determine server address")
                 return
             }
         val storedKeyB64 = ServerKeyStore.getStoredKey(identity)
         if (storedKeyB64 == null) {
-            log("Venus: no stored server key")
+            failAuth("No trusted server key was found.", "Venus: no stored server key")
             return
         }
-        val serverPublicKey = Handshake.decodePublicKey(storedKeyB64)
+        val serverPublicKey =
+            try {
+                Handshake.decodePublicKey(storedKeyB64)
+            } catch (e: Exception) {
+                failAuth("Stored server key is invalid.", "Venus: invalid stored server key - ${e.message}")
+                return
+            }
         if (!Handshake.verify(challenge, serverSig, serverPublicKey)) {
-            log("Venus: WARNING - server signature verification failed")
+            failAuth("Server signature verification failed.", "Venus: WARNING - server signature verification failed")
             sendError("mitm_sig_fail")
             return
         }
@@ -249,6 +266,14 @@ class ChannelClient(
                 ErrorPacket(type = "error", reason = reason),
             )
         ClientPlayNetworking.send(ErrorPayload(data))
+    }
+
+    private fun failAuth(
+        toastMessage: String,
+        logMessage: String,
+    ) {
+        log(logMessage)
+        showAuthFailure(toastMessage)
     }
 
     private fun getServerAddress(): ServerKeyStore.ServerIdentity? {

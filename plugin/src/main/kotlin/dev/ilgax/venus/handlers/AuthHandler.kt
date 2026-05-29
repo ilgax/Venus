@@ -31,6 +31,7 @@ class AuthHandler(
     private val sendKey: (Player, String) -> Unit,
     private val sendAuth: (Player, String) -> Unit,
     private val sendReady: (Player, String) -> Unit,
+    private val sendError: (Player, String) -> Unit,
 ) {
     private val sessionTimeoutTasks = ConcurrentHashMap<UUID, BukkitTask>()
 
@@ -80,6 +81,7 @@ class AuthHandler(
                 plugin.logger.warning(
                     "${player.name} tried to connect to Venus but max_users (${VenusConfig.maxUsers}) reached - rejecting.",
                 )
+                sendAuthError(player, "auth_max_users")
                 return
             }
 
@@ -93,6 +95,7 @@ class AuthHandler(
                 plugin,
                 Runnable {
                     if (SessionManager.getPendingApproval(player.uniqueId) != null) {
+                        plugin.server.getPlayer(player.uniqueId)?.let { sendAuthError(it, "auth_timeout") }
                         SessionManager.removePendingApproval(player.uniqueId)
                         plugin.logger.info("Venus request from ${player.name} timed out.")
                     }
@@ -111,10 +114,12 @@ class AuthHandler(
                 json.decodeFromString<AuthResponsePacket>(data)
             } catch (e: SerializationException) {
                 plugin.logger.warning("Malformed auth response packet from ${player.name}: ${e.message}")
+                sendAuthError(player, "auth_invalid_response")
                 return
             }
         if (packet.type != "auth_response") {
             plugin.logger.warning("Invalid auth response packet type from ${player.name}: ${packet.type}")
+            sendAuthError(player, "auth_invalid_response")
             return
         }
         val pending = SessionManager.getPending(player.uniqueId)
@@ -128,6 +133,7 @@ class AuthHandler(
                 Base64.getDecoder().decode(packet.challenge)
             } catch (_: IllegalArgumentException) {
                 plugin.logger.warning("Invalid Base64 in auth challenge from ${player.name}")
+                sendAuthError(player, "auth_invalid_response")
                 SessionManager.removePending(player.uniqueId)
                 return
             }
@@ -136,18 +142,21 @@ class AuthHandler(
                 Base64.getDecoder().decode(packet.clientSignature)
             } catch (_: IllegalArgumentException) {
                 plugin.logger.warning("Invalid Base64 in auth signature from ${player.name}")
+                sendAuthError(player, "auth_invalid_response")
                 SessionManager.removePending(player.uniqueId)
                 return
             }
 
         if (!challenge.contentEquals(pending.challenge)) {
             plugin.logger.warning("Challenge mismatch from ${player.name}")
+            sendAuthError(player, "auth_invalid_response")
             SessionManager.removePending(player.uniqueId)
             return
         }
 
         if (!Handshake.verify(challenge, clientSig, pending.clientPublicKey)) {
             plugin.logger.warning("Invalid signature from ${player.name} - rejecting")
+            sendAuthError(player, "auth_invalid_response")
             SessionManager.removePending(player.uniqueId)
             return
         }
@@ -206,6 +215,10 @@ class AuthHandler(
         startChallenge(player, clientPublicKey, expireChallenge = false)
     }
 
+    fun notifyDenied(player: Player) {
+        sendAuthError(player, "auth_denied")
+    }
+
     fun onPlayerQuit(player: Player) {
         val uuid = player.uniqueId
         if (!SessionManager.isActive(uuid)) return
@@ -256,5 +269,17 @@ class AuthHandler(
                 },
                 (VenusConfig.authTimeoutSeconds * 20L),
             )
+    }
+
+    private fun sendAuthError(
+        player: Player,
+        reason: String,
+    ) {
+        val data =
+            json.encodeToString(
+                ErrorPacket.serializer(),
+                ErrorPacket(type = "error", reason = reason),
+            )
+        sendError(player, data)
     }
 }
