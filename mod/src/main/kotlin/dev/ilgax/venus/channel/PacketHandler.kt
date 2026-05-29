@@ -36,7 +36,7 @@ class PacketHandler(
                 StatSubscribePacket(
                     type = "stat_subscribe",
                     intervalSeconds = 1,
-                    stats = listOf("tps", "ram", "mspt", "uptime"),
+                    stats = listOf("tps", "ram", "mspt", "uptime", "players", "server", "cpu"),
                 ),
             )
         sendCommand(subscription)

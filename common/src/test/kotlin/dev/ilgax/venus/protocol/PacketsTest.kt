@@ -103,4 +103,35 @@ class PacketsTest {
         assertTrue(!encoded.contains("mspt"))
         assertTrue(!encoded.contains("uptime"))
     }
+
+    @Test
+    fun `stats response encodes authoritative server fields with documented names`() {
+        val encoded =
+            json.encodeToString(
+                StatsPacket(
+                    type = "stats",
+                    cpuLoad = 12.3,
+                    onlinePlayers = 3,
+                    maxPlayers = 20,
+                    serverName = "Paper",
+                    minecraftVersion = "1.21.11",
+                ),
+            )
+
+        assertTrue(encoded.contains(""""cpu_load":12.3"""))
+        assertTrue(encoded.contains(""""online_players":3"""))
+        assertTrue(encoded.contains(""""max_players":20"""))
+        assertTrue(encoded.contains(""""server_name":"Paper""""))
+        assertTrue(encoded.contains(""""minecraft_version":"1.21.11""""))
+    }
+
+    @Test
+    fun `stats response decodes when newer authoritative fields are missing`() {
+        val decoded = json.decodeFromString<StatsPacket>("""{"type":"stats","tps":20.0}""")
+
+        assertEquals("stats", decoded.type)
+        assertEquals(20.0, decoded.tps)
+        assertEquals(null, decoded.onlinePlayers)
+        assertEquals(null, decoded.serverName)
+    }
 }

@@ -33,6 +33,8 @@ class VenusMod : ClientModInitializer {
         PanelKeybind.register(channelClient)
 
         ClientPlayConnectionEvents.JOIN.register { _, _, _ ->
+            val server = Minecraft.getInstance().currentServer
+            SessionState.setServerInfo(server?.ip, server?.name)
             channelClient.sendHello()
         }
 

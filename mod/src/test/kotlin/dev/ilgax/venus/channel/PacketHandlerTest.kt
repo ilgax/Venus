@@ -33,13 +33,24 @@ class PacketHandlerTest {
         val subscription = json.decodeFromString(StatSubscribePacket.serializer(), sent.single())
         assertEquals("stat_subscribe", subscription.type)
         assertEquals(1, subscription.intervalSeconds)
-        assertEquals(listOf("tps", "ram", "mspt", "uptime"), subscription.stats)
+        assertEquals(listOf("tps", "ram", "mspt", "uptime", "players", "server", "cpu"), subscription.stats)
     }
 
     @Test
     fun `data packets update stats and command response history`() {
         val handler = PacketHandler(json, {}) {}
-        val stats = StatsPacket(type = "stats", tps = 19.9, mspt = 23.4, uptime = 30)
+        val stats =
+            StatsPacket(
+                type = "stats",
+                tps = 19.9,
+                mspt = 23.4,
+                uptime = 30,
+                cpuLoad = 12.3,
+                onlinePlayers = 10,
+                maxPlayers = 20,
+                serverName = "Paper",
+                minecraftVersion = "1.21.1",
+            )
         val response = CmdResponsePacket(type = "cmd_response", command = "say hi", lines = listOf("hi"))
         val consoleLog = ConsoleLogPacket(type = "console_log", lines = listOf("[INFO]: started"))
 

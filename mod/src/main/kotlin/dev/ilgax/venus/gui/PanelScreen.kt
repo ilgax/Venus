@@ -52,28 +52,29 @@ class PanelScreen(
 
         guiGraphics.fill(0, 0, width, height, COLOR_BACKGROUND)
 
-        val panelX = 24
-        val panelY = 24
-        val panelWidth = width - 48
-        val panelHeight = height - 48
+        val padding = panelPadding()
+        val panelX = padding
+        val panelY = padding
+        val panelWidth = width - padding * 2
+        val panelHeight = height - padding * 2
 
         guiGraphics.fill(panelX, panelY, panelX + panelWidth, panelY + panelHeight, COLOR_PANEL)
         guiGraphics.renderOutline(panelX, panelY, panelWidth, panelHeight, COLOR_BORDER)
 
-        guiGraphics.drawString(font, TITLE, panelX + 18, panelY + 16, COLOR_TEXT, false)
-        guiGraphics.drawString(font, sessionLabel(), panelX + 18, panelY + 32, COLOR_MUTED, false)
+        guiGraphics.drawString(font, TITLE, panelX + 18, panelY + 12, COLOR_TEXT, false)
+        guiGraphics.drawString(font, sessionLabel(), panelX + 18, panelY + 26, COLOR_MUTED, false)
 
         val navX = panelX + 12
-        val navY = panelY + 58
-        val navWidth = 120
-        val contentX = navX + navWidth + 16
+        val navY = panelY + headerHeight()
+        val navWidth = navWidth()
+        val contentX = navX + navWidth + contentGap()
         val contentY = navY
         val contentWidth = panelX + panelWidth - contentX - 12
         val contentHeight = panelY + panelHeight - contentY - 12
 
         guiGraphics.fill(navX, navY, navX + navWidth, panelY + panelHeight - 12, COLOR_SIDEBAR)
-        renderTab(guiGraphics, navX + 8, navY + 8, navWidth - 16, "Overview", PanelTab.OVERVIEW)
-        renderTab(guiGraphics, navX + 8, navY + 34, navWidth - 16, "Console", PanelTab.CONSOLE)
+        renderTab(guiGraphics, tabBounds(PanelTab.OVERVIEW), "Overview", PanelTab.OVERVIEW)
+        renderTab(guiGraphics, tabBounds(PanelTab.CONSOLE), "Console", PanelTab.CONSOLE)
 
         guiGraphics.fill(contentX, contentY, contentX + contentWidth, contentY + contentHeight, COLOR_CONTENT)
         guiGraphics.renderOutline(contentX, contentY, contentWidth, contentHeight, COLOR_BORDER)
@@ -137,15 +138,16 @@ class PanelScreen(
         mouseButtonEvent: MouseButtonEvent,
         doubleClick: Boolean,
     ): Boolean {
-        val nav = navBounds()
         val mouseX = mouseButtonEvent.x().toInt()
         val mouseY = mouseButtonEvent.y().toInt()
-        if (inside(mouseX, mouseY, nav.x + 8, nav.y + 8, nav.width - 16, TAB_HEIGHT)) {
+        val overviewTab = tabBounds(PanelTab.OVERVIEW)
+        val consoleTab = tabBounds(PanelTab.CONSOLE)
+        if (inside(mouseX, mouseY, overviewTab.x, overviewTab.y, overviewTab.width, overviewTab.height)) {
             activeTab = PanelTab.OVERVIEW
             updateInputVisibility()
             return true
         }
-        if (inside(mouseX, mouseY, nav.x + 8, nav.y + 34, nav.width - 16, TAB_HEIGHT)) {
+        if (inside(mouseX, mouseY, consoleTab.x, consoleTab.y, consoleTab.width, consoleTab.height)) {
             activeTab = PanelTab.CONSOLE
             ensureLogSubscription()
             updateInputVisibility()
@@ -221,9 +223,7 @@ class PanelScreen(
         when (activeTab) {
             PanelTab.OVERVIEW -> {
                 updateInputVisibility()
-                guiGraphics.drawString(font, "Overview", contentX + 16, contentY + 16, COLOR_TEXT, false)
-                guiGraphics.drawString(font, overviewHint(), contentX + 16, contentY + 32, COLOR_MUTED, false)
-                StatsTab.render(guiGraphics, font, contentX + 16, contentY + 54, contentWidth - 32)
+                StatsTab.render(guiGraphics, font, contentX + 16, contentY + 16, contentWidth - 32, contentHeight - 32)
             }
 
             PanelTab.CONSOLE -> {
@@ -258,16 +258,14 @@ class PanelScreen(
 
     private fun renderTab(
         guiGraphics: GuiGraphics,
-        x: Int,
-        y: Int,
-        width: Int,
+        bounds: Bounds,
         label: String,
         tab: PanelTab,
     ) {
         if (activeTab == tab) {
-            guiGraphics.fill(x, y, x + width, y + TAB_HEIGHT, COLOR_ACTIVE_TAB)
+            guiGraphics.fill(bounds.x, bounds.y, bounds.x + bounds.width, bounds.y + bounds.height, COLOR_ACTIVE_TAB)
         }
-        guiGraphics.drawString(font, label, x + 8, y + 6, if (activeTab == tab) COLOR_TEXT else COLOR_MUTED, false)
+        guiGraphics.drawString(font, label, bounds.x + 8, bounds.y + 6, if (activeTab == tab) COLOR_TEXT else COLOR_MUTED, false)
     }
 
     private fun sessionLabel(): String =
@@ -275,13 +273,6 @@ class PanelScreen(
             "Connected"
         } else {
             "Offline or not authenticated"
-        }
-
-    private fun overviewHint(): String =
-        if (SessionState.latestStats == null) {
-            "Waiting for stats..."
-        } else {
-            "Live server stats"
         }
 
     private fun consoleHint(): String =
@@ -405,14 +396,15 @@ class PanelScreen(
     }
 
     private fun clearButtonBounds(): Bounds {
-        val panelX = 24
-        val panelY = 24
-        val panelWidth = width - 48
-        val panelHeight = height - 48
+        val panelPadding = panelPadding()
+        val panelX = panelPadding
+        val panelY = panelPadding
+        val panelWidth = width - panelPadding * 2
+        val panelHeight = height - panelPadding * 2
         val navX = panelX + 12
-        val navY = panelY + 58
-        val navWidth = 120
-        val contentX = navX + navWidth + 16
+        val navY = panelY + headerHeight()
+        val navWidth = navWidth()
+        val contentX = navX + navWidth + contentGap()
         val contentY = navY
         val contentWidth = panelX + panelWidth - contentX - 12
         return Bounds(contentX + contentWidth - 34, contentY + 12, CLEAR_BUTTON_SIZE, CLEAR_BUTTON_SIZE)
@@ -431,27 +423,45 @@ class PanelScreen(
     }
 
     private fun navBounds(): Bounds {
-        val panelX = 24
-        val panelY = 24
+        val panelX = panelPadding()
+        val panelY = panelPadding()
         val navX = panelX + 12
-        val navY = panelY + 58
-        return Bounds(navX, navY, 120)
+        val navY = panelY + headerHeight()
+        return Bounds(navX, navY, navWidth())
+    }
+
+    private fun tabBounds(tab: PanelTab): Bounds {
+        val nav = navBounds()
+        val yOffset =
+            when (tab) {
+                PanelTab.OVERVIEW -> 8
+                PanelTab.CONSOLE -> 34
+            }
+        return Bounds(nav.x + 8, nav.y + yOffset, nav.width - 16, TAB_HEIGHT)
     }
 
     private fun consoleBounds(): Bounds {
-        val panelX = 24
-        val panelY = 24
-        val panelWidth = width - 48
-        val panelHeight = height - 48
+        val panelPadding = panelPadding()
+        val panelX = panelPadding
+        val panelY = panelPadding
+        val panelWidth = width - panelPadding * 2
+        val panelHeight = height - panelPadding * 2
         val navX = panelX + 12
-        val navY = panelY + 58
-        val navWidth = 120
-        val contentX = navX + navWidth + 16
+        val navY = panelY + headerHeight()
+        val contentX = navX + navWidth() + contentGap()
         val contentY = navY
         val contentWidth = panelX + panelWidth - contentX - 12
         val contentHeight = panelY + panelHeight - contentY - 12
         return Bounds(contentX + 16, contentY + 54, contentWidth - 32, contentHeight - 90)
     }
+
+    private fun panelPadding(): Int = if (width < COMPACT_SCREEN_WIDTH || height < COMPACT_SCREEN_HEIGHT) 12 else 24
+
+    private fun headerHeight(): Int = if (width < COMPACT_SCREEN_WIDTH || height < COMPACT_SCREEN_HEIGHT) 44 else 58
+
+    private fun navWidth(): Int = if (width < COMPACT_SCREEN_WIDTH) 96 else 120
+
+    private fun contentGap(): Int = if (width < COMPACT_SCREEN_WIDTH) 10 else 16
 
     private fun consoleLineIndexAt(
         mouseY: Int,
@@ -529,6 +539,8 @@ class PanelScreen(
         const val CONSOLE_PADDING = 10
         const val MIN_SCROLLBAR_THUMB_HEIGHT = 12
         const val SCROLLBAR_HIT_WIDTH = 10
+        const val COMPACT_SCREEN_WIDTH = 900
+        const val COMPACT_SCREEN_HEIGHT = 520
         const val COLOR_BACKGROUND = 0xFF101418.toInt()
         const val COLOR_PANEL = 0xFF151A20.toInt()
         const val COLOR_SIDEBAR = 0xFF0D1117.toInt()

@@ -87,7 +87,12 @@ data class StatsPacket(
     val type: String,
     val tps: Double? = null,
     val mspt: Double? = null,
+    @SerialName("cpu_load") val cpuLoad: Double? = null,
     @SerialName("ram_used") val ramUsed: Long? = null,
     @SerialName("ram_max") val ramMax: Long? = null,
     val uptime: Long? = null,
+    @SerialName("online_players") val onlinePlayers: Int? = null,
+    @SerialName("max_players") val maxPlayers: Int? = null,
+    @SerialName("server_name") val serverName: String? = null,
+    @SerialName("minecraft_version") val minecraftVersion: String? = null,
 )

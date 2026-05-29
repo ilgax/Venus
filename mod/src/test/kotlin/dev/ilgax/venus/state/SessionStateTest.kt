@@ -35,12 +35,22 @@ class SessionStateTest {
         SessionState.activate()
         SessionState.updateStats(StatsPacket(type = "stats", uptime = 30))
         SessionState.addCommandResponse(CmdResponsePacket("cmd_response", "say hi", listOf("hi")))
+        SessionState.setServerInfo("play.venustest.com", "My Server")
 
         SessionState.reset()
 
         assertFalse(SessionState.sessionActive)
         assertNull(SessionState.latestStats)
         assertTrue(SessionState.commandResponses.isEmpty())
+        assertNull(SessionState.serverAddress)
+        assertNull(SessionState.serverListName)
+    }
+
+    @Test
+    fun `setServerInfo stores address and name`() {
+        SessionState.setServerInfo("play.venustest.com", "My Server")
+        assertEquals("play.venustest.com", SessionState.serverAddress)
+        assertEquals("My Server", SessionState.serverListName)
     }
 
     @Test
