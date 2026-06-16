@@ -45,6 +45,17 @@ class ServerKeyStoreTest {
     }
 
     @Test
+    fun `storeKey recreates servers directory when deleted`() {
+        val serversDir = tempDir.resolve("servers")
+        serversDir.deleteRecursively()
+
+        ServerKeyStore.storeKey("localhost", 25565, "key_after_delete")
+
+        assertTrue(serversDir.isDirectory)
+        assertEquals("key_after_delete", ServerKeyStore.getStoredKey("localhost", 25565))
+    }
+
+    @Test
     fun `different ports store separately`() {
         val key1 = "key_for_25565"
         val key2 = "key_for_25566"

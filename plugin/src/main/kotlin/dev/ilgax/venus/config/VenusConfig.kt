@@ -1,10 +1,11 @@
 package dev.ilgax.venus.config
 
+import dev.ilgax.venus.backend.BackendConfig
 import org.bukkit.plugin.java.JavaPlugin
 
 object VenusConfig {
-    private const val DEFAULT_MAX_USERS = 1
-    private const val DEFAULT_AUTH_TIMEOUT = 60
+    private const val DEFAULT_MAX_USERS = BackendConfig.DEFAULT_MAX_USERS
+    private const val DEFAULT_AUTH_TIMEOUT = BackendConfig.DEFAULT_AUTH_TIMEOUT_SECONDS
 
     var maxUsers: Int = DEFAULT_MAX_USERS
         private set

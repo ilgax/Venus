@@ -47,6 +47,7 @@ object ServerKeyStore {
         port: Int,
         publicKeyBase64: String,
     ) {
+        serversDir.mkdirs()
         keyFile(host, port).writeText(publicKeyBase64)
     }
 

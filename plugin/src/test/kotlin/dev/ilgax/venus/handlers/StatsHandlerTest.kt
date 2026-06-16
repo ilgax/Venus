@@ -1,6 +1,5 @@
 package dev.ilgax.venus.handlers
 
-import dev.ilgax.venus.stats.StatSubscriptionManager
 import dev.ilgax.venus.stats.StatsCollector
 import io.mockk.every
 import io.mockk.mockk
@@ -11,6 +10,8 @@ import kotlinx.serialization.json.Json
 import org.bukkit.Server
 import org.bukkit.entity.Player
 import org.bukkit.plugin.java.JavaPlugin
+import org.bukkit.scheduler.BukkitScheduler
+import org.bukkit.scheduler.BukkitTask
 import java.util.UUID
 import java.util.logging.Logger
 import kotlin.test.AfterTest
@@ -20,7 +21,6 @@ import kotlin.test.Test
 class StatsHandlerTest {
     @BeforeTest
     fun setup() {
-        mockkObject(StatSubscriptionManager)
         mockkObject(StatsCollector)
     }
 
@@ -42,28 +42,33 @@ class StatsHandlerTest {
         val handler = StatsHandler(plugin, json, sendData)
         handler.handleSubscribe(player, "{ malformed ")
 
-        verify(exactly = 0) { StatSubscriptionManager.subscribe(any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { sendData(any(), any()) }
     }
 
     @Test
     fun `handleSubscribe processes valid request`() {
         val plugin = mockk<JavaPlugin>(relaxed = true)
+        val server = mockk<Server>(relaxed = true)
+        val scheduler = mockk<BukkitScheduler>(relaxed = true)
+        val task = mockk<BukkitTask>(relaxed = true)
         val player = mockk<Player>(relaxed = true)
         val sendData: (Player, String) -> Unit = mockk(relaxed = true)
         val json = Json { ignoreUnknownKeys = true }
 
         val uuid = UUID.randomUUID()
+        every { plugin.server } returns server
+        every { server.scheduler } returns scheduler
+        every { scheduler.runTaskTimer(any(), any<Runnable>(), any(), any()) } returns task
         every { plugin.logger } returns Logger.getAnonymousLogger()
         every { player.name } returns "TestPlayer"
         every { player.uniqueId } returns uuid
-        every { StatSubscriptionManager.subscribe(any(), any(), any(), any(), any()) } returns Unit
 
         val handler = StatsHandler(plugin, json, sendData)
-        val packetJson = """{"type":"stat_subscribe","stats":["tps"],"intervalSeconds":5}"""
+        val packetJson = """{"type":"stat_subscribe","stats":["tps"],"interval_seconds":5}"""
 
         handler.handleSubscribe(player, packetJson)
 
-        verify { StatSubscriptionManager.subscribe(any(), any(), any(), any(), any()) }
+        verify { scheduler.runTaskTimer(plugin, any<Runnable>(), 100L, 100L) }
     }
 
     @Test
@@ -93,6 +98,8 @@ class StatsHandlerTest {
         every { plugin.server } returns server
         every { plugin.logger } returns Logger.getAnonymousLogger()
         every { player.name } returns "TestPlayer"
+        every { player.uniqueId } returns UUID.randomUUID()
+        every { server.getPlayer(player.uniqueId) } returns player
         every { StatsCollector.buildStatsJson(server, listOf("tps")) } returns """{"type":"stat_data","data":{}}"""
 
         val handler = StatsHandler(plugin, json, sendData)

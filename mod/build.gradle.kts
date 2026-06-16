@@ -24,6 +24,7 @@ dependencies {
     modImplementation("net.fabricmc.fabric-api:fabric-api:$fabricApiVersion")
     modImplementation("net.fabricmc:fabric-language-kotlin:$fabricLanguageKotlinVersion")
     implementation(project(":common"))
+    implementation(project(":backend"))
     testImplementation(kotlin("test"))
 }
 
@@ -61,6 +62,14 @@ tasks.remapJar {
                 .archiveFile,
         ),
     )
+    from(
+        zipTree(
+            project(":backend")
+                .tasks.jar
+                .get()
+                .archiveFile,
+        ),
+    )
 }
 
 tasks.withType<JavaCompile> {
@@ -75,6 +84,19 @@ if (deployDir != null) {
         dependsOn(tasks.remapJar)
     }
     tasks.remapJar { finalizedBy("deploy") }
+}
+
+val fabricServerDeployDir: String? = findProperty("venus.deploy.fabricServerModDir") as? String
+if (fabricServerDeployDir != null) {
+    tasks.register<Copy>("deployFabricServer") {
+        from(layout.buildDirectory.file("libs/venus-mod-${project.version}.jar"))
+        into(fabricServerDeployDir)
+        dependsOn(tasks.remapJar)
+        doFirst {
+            delete(fileTree(fabricServerDeployDir) { include("venus-mod-*.jar") })
+        }
+    }
+    tasks.remapJar { finalizedBy("deployFabricServer") }
 }
 
 loom {

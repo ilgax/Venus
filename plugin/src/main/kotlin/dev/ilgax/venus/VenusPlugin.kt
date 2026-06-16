@@ -3,6 +3,7 @@ package dev.ilgax.venus
 import dev.ilgax.venus.auth.AuthorizedKeys
 import dev.ilgax.venus.auth.KeyManager
 import dev.ilgax.venus.auth.SessionManager
+import dev.ilgax.venus.backend.BackendStatSubscriptionManager
 import dev.ilgax.venus.channel.ChannelListener
 import dev.ilgax.venus.channel.PacketRouter
 import dev.ilgax.venus.commands.VenusCommand
@@ -12,8 +13,8 @@ import dev.ilgax.venus.handlers.ConsoleHandler
 import dev.ilgax.venus.handlers.LogHandler
 import dev.ilgax.venus.handlers.PlayersHandler
 import dev.ilgax.venus.handlers.StatsHandler
+import dev.ilgax.venus.platform.PaperBackendPlatform
 import dev.ilgax.venus.protocol.VenusChannels
-import dev.ilgax.venus.stats.StatSubscriptionManager
 import kotlinx.serialization.json.Json
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket
 import net.minecraft.network.protocol.common.custom.DiscardedPayload
@@ -32,6 +33,7 @@ class VenusPlugin :
     private lateinit var authHandler: AuthHandler
     private lateinit var logHandler: LogHandler
     private lateinit var channelListener: ChannelListener
+    private lateinit var statSubscriptions: BackendStatSubscriptionManager
 
     override fun onEnable() {
         VenusConfig.load(this)
@@ -41,25 +43,32 @@ class VenusPlugin :
         AuthorizedKeys.init(dataFolder)
 
         val sendData = { player: Player, data: String -> sendPayloadToPlayer(player, "data", data) }
-        logHandler = LogHandler(this, json, sendData)
+        val platform =
+            PaperBackendPlatform(
+                this,
+                sendKeyPacket = { player, data -> sendPayloadToPlayer(player, "key", data) },
+                sendAuthPacket = { player, data -> sendPayloadToPlayer(player, "auth", data) },
+                sendReadyPacket = { player, data -> sendPayloadToPlayer(player, "ready", data) },
+                sendErrorPacket = { player, data -> sendPayloadToPlayer(player, "error", data) },
+                sendDataPacket = sendData,
+            )
+        statSubscriptions = BackendStatSubscriptionManager(platform)
+        logHandler = LogHandler(this, platform, json)
         val packetRouter =
             PacketRouter(
                 this,
                 json,
-                ConsoleHandler(this, json, sendData, logHandler::suppressNextFor),
-                StatsHandler(this, json, sendData),
+                ConsoleHandler(platform, json, logHandler::suppressNextFor),
+                StatsHandler(platform, json, statSubscriptions),
                 logHandler,
-                PlayersHandler(this, json, sendData),
+                PlayersHandler(platform, json),
             )
         authHandler =
             AuthHandler(
-                this,
+                platform,
                 json,
                 keyManager,
-                sendKey = { player, data -> sendPayloadToPlayer(player, "key", data) },
-                sendAuth = { player, data -> sendPayloadToPlayer(player, "auth", data) },
-                sendReady = { player, data -> sendPayloadToPlayer(player, "ready", data) },
-                sendError = { player, data -> sendPayloadToPlayer(player, "error", data) },
+                statSubscriptions,
             )
         channelListener = ChannelListener(authHandler, packetRouter)
         logHandler.start()
@@ -78,7 +87,7 @@ class VenusPlugin :
         logger.info("Venus disabled")
         logHandler.stop()
         authHandler.cancelAllTimeouts()
-        StatSubscriptionManager.cancelAll()
+        statSubscriptions.cancelAll()
         SessionManager.clearAll()
         server.messenger.unregisterIncomingPluginChannel(this, VenusChannels.HELLO)
         server.messenger.unregisterIncomingPluginChannel(this, VenusChannels.KEY)

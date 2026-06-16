@@ -5,7 +5,7 @@ plugins {
 
 allprojects {
     group = "dev.ilgax.venus"
-    version = "0.2.1"
+    version = "0.2.2"
 
     repositories {
         mavenCentral()
@@ -23,6 +23,7 @@ allprojects {
 
 dependencies {
     kover(project(":common"))
+    kover(project(":backend"))
     kover(project(":mod"))
     kover(project(":plugin"))
 }

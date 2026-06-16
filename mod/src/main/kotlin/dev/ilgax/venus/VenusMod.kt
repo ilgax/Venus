@@ -9,6 +9,7 @@ import dev.ilgax.venus.keybind.PanelKeybind
 import dev.ilgax.venus.state.SessionState
 import kotlinx.serialization.json.Json
 import net.fabricmc.api.ClientModInitializer
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
 import net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents
 import net.minecraft.client.Minecraft
@@ -17,6 +18,7 @@ import java.io.File
 
 class VenusMod : ClientModInitializer {
     private lateinit var channelClient: ChannelClient
+    private var pendingHelloAttempts = 0
 
     override fun onInitializeClient() {
         LOGGER.info("Venus mod loaded")
@@ -36,7 +38,29 @@ class VenusMod : ClientModInitializer {
         ClientPlayConnectionEvents.JOIN.register { _, _, _ ->
             val server = Minecraft.getInstance().currentServer
             SessionState.setServerInfo(server?.ip, server?.name)
-            channelClient.sendHello()
+            if (channelClient.canSendHello()) {
+                LOGGER.info("Venus hello channel available; sending hello")
+                channelClient.sendHello()
+            } else {
+                LOGGER.warn("Venus hello channel not available on join; retrying")
+                pendingHelloAttempts = HELLO_RETRY_TICKS
+            }
+        }
+
+        ClientTickEvents.END_CLIENT_TICK.register {
+            if (pendingHelloAttempts <= 0 || Minecraft.getInstance().player == null) return@register
+
+            if (channelClient.canSendHello()) {
+                LOGGER.info("Venus hello channel became available; sending hello")
+                channelClient.sendHello()
+                pendingHelloAttempts = 0
+                return@register
+            }
+
+            pendingHelloAttempts -= 1
+            if (pendingHelloAttempts == 0) {
+                LOGGER.warn("Venus hello channel was not advertised by this server")
+            }
         }
 
         ClientSendMessageEvents.ALLOW_CHAT.register { message ->
@@ -55,5 +79,6 @@ class VenusMod : ClientModInitializer {
 
     companion object {
         private val LOGGER = LoggerFactory.getLogger("Venus")
+        private const val HELLO_RETRY_TICKS = 40
     }
 }

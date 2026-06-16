@@ -137,6 +137,8 @@ class ChannelClient(
         ClientPlayNetworking.send(HelloPayload)
     }
 
+    fun canSendHello(): Boolean = ClientPlayNetworking.canSend(HelloPayload.TYPE)
+
     fun sendCommand(data: String) {
         ClientPlayNetworking.send(CmdPayload(data))
     }

@@ -12,4 +12,4 @@ pluginManagement {
 
 rootProject.name = "venus"
 
-include("common", "plugin", "mod")
+include("common", "backend", "plugin", "mod")

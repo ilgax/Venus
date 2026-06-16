@@ -1,14 +1,14 @@
 package dev.ilgax.venus.channel
 
-import dev.ilgax.venus.auth.SessionManager
+import dev.ilgax.venus.backend.BackendCommandRoute
+import dev.ilgax.venus.backend.BackendPacketRouter
 import dev.ilgax.venus.handlers.ConsoleHandler
 import dev.ilgax.venus.handlers.LogHandler
 import dev.ilgax.venus.handlers.PlayersHandler
 import dev.ilgax.venus.handlers.StatsHandler
-import kotlinx.serialization.SerializationException
+import dev.ilgax.venus.platform.PaperBackendPlatform
+import dev.ilgax.venus.platform.toBackendPlayer
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import org.bukkit.entity.Player
 import org.bukkit.plugin.java.JavaPlugin
 
@@ -25,50 +25,33 @@ internal enum class CommandRoute(
     ;
 
     companion object {
-        fun fromPacketType(packetType: String): CommandRoute? = entries.firstOrNull { it.packetType == packetType }
+        fun fromPacketType(packetType: String): CommandRoute? =
+            BackendCommandRoute.fromPacketType(packetType)?.let { route ->
+                entries.firstOrNull { it.packetType == route.packetType }
+            }
     }
 }
 
 class PacketRouter(
-    private val plugin: JavaPlugin,
-    private val json: Json,
-    private val consoleHandler: ConsoleHandler,
-    private val statsHandler: StatsHandler,
-    private val logHandler: LogHandler,
-    private val playersHandler: PlayersHandler,
+    plugin: JavaPlugin,
+    json: Json,
+    consoleHandler: ConsoleHandler,
+    statsHandler: StatsHandler,
+    logHandler: LogHandler,
+    playersHandler: PlayersHandler,
 ) {
+    internal val delegate =
+        BackendPacketRouter(
+            PaperBackendPlatform(plugin),
+            json,
+            consoleHandler.delegate,
+            statsHandler.delegate,
+            logHandler.delegate,
+            playersHandler.delegate,
+        )
+
     fun handleCommand(
         player: Player,
         data: String,
-    ) {
-        if (!SessionManager.isActive(player.uniqueId)) {
-            plugin.logger.warning("${player.name} sent cmd packet without active session - ignoring")
-            return
-        }
-
-        val jsonElement =
-            try {
-                json.parseToJsonElement(data)
-            } catch (e: SerializationException) {
-                plugin.logger.warning("${player.name} sent malformed cmd packet: ${e.message}")
-                return
-            }
-        val type =
-            jsonElement.jsonObject["type"]?.jsonPrimitive?.content
-                ?: run {
-                    plugin.logger.warning("${player.name} sent cmd packet without type field")
-                    return
-                }
-
-        when (CommandRoute.fromPacketType(type)) {
-            CommandRoute.CONSOLE_CMD -> consoleHandler.handle(player, data)
-            CommandRoute.LOG_SUBSCRIBE -> logHandler.handleSubscribe(player, data)
-            CommandRoute.STAT_SUBSCRIBE -> statsHandler.handleSubscribe(player, data)
-            CommandRoute.STAT_GET -> statsHandler.handleGet(player, data)
-            CommandRoute.PLAYER_LIST_GET -> playersHandler.handleListGet(player, data)
-            CommandRoute.PLAYER_DETAIL_GET -> playersHandler.handleDetailGet(player, data)
-            CommandRoute.PLAYER_ACTION -> playersHandler.handleAction(player, data)
-            null -> plugin.logger.warning("${player.name} sent unknown cmd packet type: $type")
-        }
-    }
+    ) = delegate.handleCommand(player.toBackendPlayer(), data)
 }

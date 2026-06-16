@@ -25,7 +25,7 @@ class AuthorizedKeysTest {
     }
 
     @Test
-    fun `init creates authorized_keys file`() {
+    fun `init creates authorized keys file`() {
         val keysFile = tempDir.resolve("keys").resolve("authorized_keys.txt")
         assertTrue(keysFile.exists())
     }
@@ -37,7 +37,7 @@ class AuthorizedKeysTest {
 
     @Test
     fun `authorize and isAuthorized roundtrip`() {
-        val key = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEabcdefgh"
+        val key = "public_key_base64_value"
         assertFalse(AuthorizedKeys.isAuthorized(key))
         AuthorizedKeys.authorize(key, "testuser")
         assertTrue(AuthorizedKeys.isAuthorized(key))
@@ -58,7 +58,7 @@ class AuthorizedKeysTest {
     }
 
     @Test
-    fun `isAuthorized matches only first whitespace-delimited field`() {
+    fun `isAuthorized matches only first whitespace delimited field`() {
         val key = "actual_key_value"
         AuthorizedKeys.authorize(key, "comment with spaces and extra data")
         assertTrue(AuthorizedKeys.isAuthorized(key))

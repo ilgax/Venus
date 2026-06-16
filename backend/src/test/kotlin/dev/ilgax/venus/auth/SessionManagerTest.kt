@@ -34,14 +34,12 @@ class SessionManagerTest {
 
     @Test
     fun `getPending returns null for unknown uuid`() {
-        val unknown = UUID.randomUUID()
-        assertNull(SessionManager.getPending(unknown))
+        assertNull(SessionManager.getPending(UUID.randomUUID()))
     }
 
     @Test
     fun `removePending removes and returns session`() {
-        val challenge = ByteArray(32) { 42 }
-        val session = PendingSession(keyPair.public, challenge)
+        val session = PendingSession(keyPair.public, ByteArray(32) { 42 })
         SessionManager.addPending(uuid, session)
         val removed = SessionManager.removePending(uuid)
         assertEquals(session, removed)
@@ -50,26 +48,16 @@ class SessionManagerTest {
 
     @Test
     fun `addPendingApproval and getPendingApproval roundtrip`() {
-        val b64 =
-            java.util.Base64
-                .getEncoder()
-                .encodeToString(keyPair.public.encoded)
-        val approval = PendingApproval(keyPair.public, b64)
+        val approval = PendingApproval(keyPair.public, keyPair.public.encoded.toString())
         SessionManager.addPendingApproval(uuid, approval)
-        val stored = SessionManager.getPendingApproval(uuid)
-        assertEquals(approval, stored)
+        assertEquals(approval, SessionManager.getPendingApproval(uuid))
     }
 
     @Test
     fun `removePendingApproval removes and returns`() {
-        val b64 =
-            java.util.Base64
-                .getEncoder()
-                .encodeToString(keyPair.public.encoded)
-        val approval = PendingApproval(keyPair.public, b64)
+        val approval = PendingApproval(keyPair.public, keyPair.public.encoded.toString())
         SessionManager.addPendingApproval(uuid, approval)
-        val removed = SessionManager.removePendingApproval(uuid)
-        assertEquals(approval, removed)
+        assertEquals(approval, SessionManager.removePendingApproval(uuid))
         assertNull(SessionManager.getPendingApproval(uuid))
     }
 
@@ -77,17 +65,12 @@ class SessionManagerTest {
     fun `getNextPendingApproval returns first entry`() {
         val uuid1 = UUID.randomUUID()
         val uuid2 = UUID.randomUUID()
-        val b64 =
-            java.util.Base64
-                .getEncoder()
-                .encodeToString(keyPair.public.encoded)
-        val approval1 = PendingApproval(keyPair.public, b64)
-        val approval2 = PendingApproval(keyPair.public, "$b64-other")
+        val approval1 = PendingApproval(keyPair.public, "key1")
+        val approval2 = PendingApproval(keyPair.public, "key2")
         try {
             SessionManager.addPendingApproval(uuid1, approval1)
             SessionManager.addPendingApproval(uuid2, approval2)
-            val next = SessionManager.getNextPendingApproval()
-            assertNotNull(next)
+            assertNotNull(SessionManager.getNextPendingApproval())
         } finally {
             SessionManager.removePendingApproval(uuid1)
             SessionManager.removePendingApproval(uuid2)
@@ -114,23 +97,9 @@ class SessionManagerTest {
     }
 
     @Test
-    fun `disconnected session cannot authorize a reconnect before new authentication`() {
-        SessionManager.activate(uuid, keyPair.public)
-
-        SessionManager.deactivate(uuid)
-
-        assertFalse(SessionManager.isActive(uuid))
-    }
-
-    @Test
     fun `deactivate removes all three associations`() {
-        val challenge = ByteArray(32) { 7 }
-        val b64 =
-            java.util.Base64
-                .getEncoder()
-                .encodeToString(keyPair.public.encoded)
-        SessionManager.addPending(uuid, PendingSession(keyPair.public, challenge))
-        SessionManager.addPendingApproval(uuid, PendingApproval(keyPair.public, b64))
+        SessionManager.addPending(uuid, PendingSession(keyPair.public, ByteArray(32) { 7 }))
+        SessionManager.addPendingApproval(uuid, PendingApproval(keyPair.public, "key"))
         SessionManager.activate(uuid, keyPair.public)
         SessionManager.deactivate(uuid)
         assertFalse(SessionManager.isActive(uuid))
@@ -141,28 +110,24 @@ class SessionManagerTest {
     @Test
     fun `PendingSession equals with same challenge content`() {
         val challenge = ByteArray(32) { 1 }
-        val challengeCopy = challenge.copyOf()
         val s1 = PendingSession(keyPair.public, challenge)
-        val s2 = PendingSession(keyPair.public, challengeCopy)
+        val s2 = PendingSession(keyPair.public, challenge.copyOf())
         assertEquals(s1, s2)
         assertEquals(s1.hashCode(), s2.hashCode())
     }
 
     @Test
     fun `PendingSession not equal with different challenge`() {
-        val c1 = ByteArray(32) { 1 }
-        val c2 = ByteArray(32) { 2 }
-        val s1 = PendingSession(keyPair.public, c1)
-        val s2 = PendingSession(keyPair.public, c2)
+        val s1 = PendingSession(keyPair.public, ByteArray(32) { 1 })
+        val s2 = PendingSession(keyPair.public, ByteArray(32) { 2 })
         assertNotEquals(s1, s2)
     }
 
     @Test
     fun `PendingSession not equal with different key`() {
         val otherKeyPair = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
-        val challenge = ByteArray(32) { 1 }
-        val s1 = PendingSession(keyPair.public, challenge)
-        val s2 = PendingSession(otherKeyPair.public, challenge.copyOf())
+        val s1 = PendingSession(keyPair.public, ByteArray(32) { 1 })
+        val s2 = PendingSession(otherKeyPair.public, ByteArray(32) { 1 })
         assertNotEquals(s1, s2)
     }
 }

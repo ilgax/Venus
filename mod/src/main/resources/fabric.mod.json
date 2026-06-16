@@ -12,8 +12,14 @@
     "issues": "https://github.com/ilgax/venus/issues"
   },
   "license": "AGPL-3.0-or-later",
-  "environment": "client",
+  "environment": "*",
   "entrypoints": {
+    "server": [
+      {
+        "adapter": "kotlin",
+        "value": "dev.ilgax.venus.VenusServerMod"
+      }
+    ],
     "client": [
       {
         "adapter": "kotlin",

@@ -1,42 +1,41 @@
 package dev.ilgax.venus.channel
 
+import dev.ilgax.venus.backend.BackendChannelHandler
+import dev.ilgax.venus.backend.BackendIncomingChannel
 import dev.ilgax.venus.handlers.AuthHandler
-import dev.ilgax.venus.protocol.VenusChannels
+import dev.ilgax.venus.platform.toBackendPlayer
 import org.bukkit.entity.Player
 import org.bukkit.plugin.messaging.PluginMessageListener
 
 internal enum class IncomingChannel(
     val channel: String,
 ) {
-    HELLO(VenusChannels.HELLO),
-    KEY(VenusChannels.KEY),
-    AUTH(VenusChannels.AUTH),
-    ERROR(VenusChannels.ERROR),
-    CMD(VenusChannels.CMD),
+    HELLO(BackendIncomingChannel.HELLO.channel),
+    KEY(BackendIncomingChannel.KEY.channel),
+    AUTH(BackendIncomingChannel.AUTH.channel),
+    ERROR(BackendIncomingChannel.ERROR.channel),
+    CMD(BackendIncomingChannel.CMD.channel),
     ;
 
     companion object {
-        fun fromChannel(channel: String): IncomingChannel? = entries.firstOrNull { it.channel == channel }
+        fun fromChannel(channel: String): IncomingChannel? =
+            BackendIncomingChannel.fromChannel(channel)?.let { backend ->
+                entries.firstOrNull { it.channel == backend.channel }
+            }
     }
 }
 
 class ChannelListener(
-    private val authHandler: AuthHandler,
-    private val packetRouter: PacketRouter,
+    authHandler: AuthHandler,
+    packetRouter: PacketRouter,
 ) : PluginMessageListener {
+    private val delegate = BackendChannelHandler(authHandler.delegate, packetRouter.delegate)
+
     override fun onPluginMessageReceived(
         channel: String,
         player: Player,
         message: ByteArray,
     ) {
-        val data = message.toString(Charsets.UTF_8)
-        when (IncomingChannel.fromChannel(channel)) {
-            IncomingChannel.HELLO -> authHandler.handleHello(player)
-            IncomingChannel.KEY -> authHandler.handleClientKey(player, data)
-            IncomingChannel.AUTH -> authHandler.handleAuthResponse(player, data)
-            IncomingChannel.ERROR -> authHandler.handleClientError(player, data)
-            IncomingChannel.CMD -> packetRouter.handleCommand(player, data)
-            null -> Unit
-        }
+        delegate.handle(channel, player.toBackendPlayer(), message.toString(Charsets.UTF_8))
     }
 }

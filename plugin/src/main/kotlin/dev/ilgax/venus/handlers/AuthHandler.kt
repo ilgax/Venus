@@ -1,285 +1,73 @@
 package dev.ilgax.venus.handlers
 
-import dev.ilgax.venus.auth.AuthorizedKeys
-import dev.ilgax.venus.auth.Handshake
 import dev.ilgax.venus.auth.KeyManager
-import dev.ilgax.venus.auth.PendingApproval
-import dev.ilgax.venus.auth.PendingSession
-import dev.ilgax.venus.auth.SessionManager
-import dev.ilgax.venus.config.VenusConfig
-import dev.ilgax.venus.protocol.AuthChallengePacket
-import dev.ilgax.venus.protocol.AuthResponsePacket
-import dev.ilgax.venus.protocol.ClientKeyPacket
-import dev.ilgax.venus.protocol.ErrorPacket
-import dev.ilgax.venus.protocol.ReadyPacket
-import dev.ilgax.venus.protocol.ServerKeyPacket
-import dev.ilgax.venus.stats.StatSubscriptionManager
-import kotlinx.serialization.SerializationException
+import dev.ilgax.venus.backend.BackendAuthHandler
+import dev.ilgax.venus.backend.BackendPlatform
+import dev.ilgax.venus.backend.BackendStatSubscriptionManager
+import dev.ilgax.venus.platform.PaperBackendPlatform
+import dev.ilgax.venus.platform.toBackendPlayer
 import kotlinx.serialization.json.Json
 import org.bukkit.entity.Player
 import org.bukkit.plugin.java.JavaPlugin
-import org.bukkit.scheduler.BukkitTask
 import java.security.PublicKey
-import java.util.Base64
-import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
 
-class AuthHandler(
-    private val plugin: JavaPlugin,
-    private val json: Json,
-    private val keyManager: KeyManager,
-    private val sendKey: (Player, String) -> Unit,
-    private val sendAuth: (Player, String) -> Unit,
-    private val sendReady: (Player, String) -> Unit,
-    private val sendError: (Player, String) -> Unit,
-) {
-    private val sessionTimeoutTasks = ConcurrentHashMap<UUID, BukkitTask>()
+class AuthHandler {
+    internal val delegate: BackendAuthHandler
 
-    fun handleHello(player: Player) {
-        sessionTimeoutTasks.remove(player.uniqueId)?.cancel()
-        val data =
-            json.encodeToString(
-                ServerKeyPacket.serializer(),
-                ServerKeyPacket(type = "server_key", publicKey = keyManager.publicKeyBase64),
+    constructor(
+        plugin: JavaPlugin,
+        json: Json,
+        keyManager: KeyManager,
+        sendKey: (Player, String) -> Unit,
+        sendAuth: (Player, String) -> Unit,
+        sendReady: (Player, String) -> Unit,
+        sendError: (Player, String) -> Unit,
+    ) {
+        val platform =
+            PaperBackendPlatform(
+                plugin,
+                sendKeyPacket = sendKey,
+                sendAuthPacket = sendAuth,
+                sendReadyPacket = sendReady,
+                sendErrorPacket = sendError,
             )
-        sendKey(player, data)
+        delegate = BackendAuthHandler(platform, json, keyManager, BackendStatSubscriptionManager(platform))
     }
+
+    internal constructor(
+        platform: BackendPlatform,
+        json: Json,
+        keyManager: KeyManager,
+        subscriptions: BackendStatSubscriptionManager,
+    ) {
+        delegate = BackendAuthHandler(platform, json, keyManager, subscriptions)
+    }
+
+    fun handleHello(player: Player) = delegate.handleHello(player.toBackendPlayer())
 
     fun handleClientKey(
         player: Player,
         data: String,
-    ) {
-        val packet =
-            try {
-                json.decodeFromString<ClientKeyPacket>(data)
-            } catch (e: SerializationException) {
-                plugin.logger.warning("Malformed client key packet from ${player.name}: ${e.message}")
-                return
-            }
-        if (packet.type != "client_key") {
-            plugin.logger.warning("Invalid client key packet type from ${player.name}: ${packet.type}")
-            return
-        }
-        val clientPublicKeyBase64 = packet.publicKey
-        if (clientPublicKeyBase64.isBlank()) {
-            plugin.logger.warning("Empty client key from ${player.name}")
-            return
-        }
-
-        val clientPublicKey =
-            try {
-                Handshake.decodePublicKey(clientPublicKeyBase64)
-            } catch (e: Exception) {
-                plugin.logger.warning("Invalid client key from ${player.name}: ${e.message}")
-                return
-            }
-
-        if (AuthorizedKeys.isAuthorized(clientPublicKeyBase64)) {
-            startChallenge(player, clientPublicKey, expireChallenge = true)
-        } else {
-            if (AuthorizedKeys.count() >= VenusConfig.maxUsers) {
-                plugin.logger.warning(
-                    "${player.name} tried to connect to Venus but max_users (${VenusConfig.maxUsers}) reached - rejecting.",
-                )
-                sendAuthError(player, "auth_max_users")
-                return
-            }
-
-            SessionManager.addPendingApproval(
-                player.uniqueId,
-                PendingApproval(clientPublicKey, clientPublicKeyBase64),
-            )
-            plugin.logger.info("${player.name} wants to connect to Venus. Type 'venus allow' or 'venus deny'")
-
-            plugin.server.scheduler.runTaskLater(
-                plugin,
-                Runnable {
-                    if (SessionManager.getPendingApproval(player.uniqueId) != null) {
-                        plugin.server.getPlayer(player.uniqueId)?.let { sendAuthError(it, "auth_timeout") }
-                        SessionManager.removePendingApproval(player.uniqueId)
-                        plugin.logger.info("Venus request from ${player.name} timed out.")
-                    }
-                },
-                (VenusConfig.authTimeoutSeconds * 20L),
-            )
-        }
-    }
+    ) = delegate.handleClientKey(player.toBackendPlayer(), data)
 
     fun handleAuthResponse(
         player: Player,
         data: String,
-    ) {
-        val packet =
-            try {
-                json.decodeFromString<AuthResponsePacket>(data)
-            } catch (e: SerializationException) {
-                plugin.logger.warning("Malformed auth response packet from ${player.name}: ${e.message}")
-                sendAuthError(player, "auth_invalid_response")
-                return
-            }
-        if (packet.type != "auth_response") {
-            plugin.logger.warning("Invalid auth response packet type from ${player.name}: ${packet.type}")
-            sendAuthError(player, "auth_invalid_response")
-            return
-        }
-        val pending = SessionManager.getPending(player.uniqueId)
-        if (pending == null) {
-            plugin.logger.warning("No pending session for ${player.name}")
-            return
-        }
-
-        val challenge =
-            try {
-                Base64.getDecoder().decode(packet.challenge)
-            } catch (_: IllegalArgumentException) {
-                plugin.logger.warning("Invalid Base64 in auth challenge from ${player.name}")
-                sendAuthError(player, "auth_invalid_response")
-                SessionManager.removePending(player.uniqueId)
-                return
-            }
-        val clientSig =
-            try {
-                Base64.getDecoder().decode(packet.clientSignature)
-            } catch (_: IllegalArgumentException) {
-                plugin.logger.warning("Invalid Base64 in auth signature from ${player.name}")
-                sendAuthError(player, "auth_invalid_response")
-                SessionManager.removePending(player.uniqueId)
-                return
-            }
-
-        if (!challenge.contentEquals(pending.challenge)) {
-            plugin.logger.warning("Challenge mismatch from ${player.name}")
-            sendAuthError(player, "auth_invalid_response")
-            SessionManager.removePending(player.uniqueId)
-            return
-        }
-
-        if (!Handshake.verify(challenge, clientSig, pending.clientPublicKey)) {
-            plugin.logger.warning("Invalid signature from ${player.name} - rejecting")
-            sendAuthError(player, "auth_invalid_response")
-            SessionManager.removePending(player.uniqueId)
-            return
-        }
-
-        SessionManager.removePending(player.uniqueId)
-        sessionTimeoutTasks.remove(player.uniqueId)?.cancel()
-        SessionManager.activate(player.uniqueId, pending.clientPublicKey)
-        plugin.logger.info("Venus session active for ${player.name}")
-
-        val data =
-            json.encodeToString(
-                ReadyPacket.serializer(),
-                ReadyPacket(type = "ready"),
-            )
-        sendReady(player, data)
-    }
+    ) = delegate.handleAuthResponse(player.toBackendPlayer(), data)
 
     fun handleClientError(
         player: Player,
         data: String,
-    ) {
-        val packet =
-            try {
-                json.decodeFromString<ErrorPacket>(data)
-            } catch (e: SerializationException) {
-                plugin.logger.warning("${player.name} sent malformed error packet: ${e.message}")
-                return
-            }
-        if (packet.type != "error") {
-            plugin.logger.warning("${player.name} sent invalid error packet type: ${packet.type}")
-            return
-        }
-        when (val reason = packet.reason) {
-            "mitm_key_mismatch" -> {
-                plugin.logger.warning(
-                    "${player.name} rejected connection - server key mismatch on client side (possible MITM)",
-                )
-            }
-
-            "mitm_sig_fail" -> {
-                plugin.logger.warning(
-                    "${player.name} rejected connection - server signature verification failed on client side (possible MITM)",
-                )
-            }
-
-            else -> {
-                plugin.logger.warning("${player.name} sent error: $reason")
-            }
-        }
-    }
+    ) = delegate.handleClientError(player.toBackendPlayer(), data)
 
     fun startApprovedChallenge(
         player: Player,
         clientPublicKey: PublicKey,
-    ) {
-        startChallenge(player, clientPublicKey, expireChallenge = false)
-    }
+    ) = delegate.startApprovedChallenge(player.toBackendPlayer(), clientPublicKey)
 
-    fun notifyDenied(player: Player) {
-        sendAuthError(player, "auth_denied")
-    }
+    fun notifyDenied(player: Player) = delegate.notifyDenied(player.toBackendPlayer())
 
-    fun onPlayerQuit(player: Player) {
-        val uuid = player.uniqueId
-        if (!SessionManager.isActive(uuid)) return
+    fun onPlayerQuit(player: Player) = delegate.onPlayerQuit(player.toBackendPlayer())
 
-        sessionTimeoutTasks.remove(uuid)?.cancel()
-        SessionManager.deactivate(uuid)
-        StatSubscriptionManager.cancel(uuid)
-    }
-
-    fun cancelAllTimeouts() {
-        sessionTimeoutTasks.values.forEach { it.cancel() }
-        sessionTimeoutTasks.clear()
-    }
-
-    private fun startChallenge(
-        player: Player,
-        clientPublicKey: PublicKey,
-        expireChallenge: Boolean,
-    ) {
-        val challenge = Handshake.generateChallenge()
-        val serverSig = Handshake.sign(challenge, keyManager.privateKey)
-        SessionManager.addPending(player.uniqueId, PendingSession(clientPublicKey, challenge))
-        if (expireChallenge) {
-            scheduleAuthChallengeTimeout(player)
-        }
-        val challengeB64 = Base64.getEncoder().encodeToString(challenge)
-        val sigB64 = Base64.getEncoder().encodeToString(serverSig)
-        val data =
-            json.encodeToString(
-                AuthChallengePacket.serializer(),
-                AuthChallengePacket(type = "auth_challenge", challenge = challengeB64, serverSignature = sigB64),
-            )
-        sendAuth(player, data)
-    }
-
-    private fun scheduleAuthChallengeTimeout(player: Player) {
-        val uuid = player.uniqueId
-        sessionTimeoutTasks[uuid]?.cancel()
-        sessionTimeoutTasks[uuid] =
-            plugin.server.scheduler.runTaskLater(
-                plugin,
-                Runnable {
-                    if (SessionManager.getPending(uuid) != null) {
-                        SessionManager.removePending(uuid)
-                        plugin.logger.info("Auth challenge expired for ${player.name}")
-                    }
-                    sessionTimeoutTasks.remove(uuid)
-                },
-                (VenusConfig.authTimeoutSeconds * 20L),
-            )
-    }
-
-    private fun sendAuthError(
-        player: Player,
-        reason: String,
-    ) {
-        val data =
-            json.encodeToString(
-                ErrorPacket.serializer(),
-                ErrorPacket(type = "error", reason = reason),
-            )
-        sendError(player, data)
-    }
+    fun cancelAllTimeouts() = delegate.cancelAllTimeouts()
 }

@@ -11,7 +11,6 @@ import dev.ilgax.venus.protocol.AuthResponsePacket
 import dev.ilgax.venus.protocol.ClientKeyPacket
 import dev.ilgax.venus.protocol.ErrorPacket
 import dev.ilgax.venus.protocol.ServerKeyPacket
-import dev.ilgax.venus.stats.StatSubscriptionManager
 import io.mockk.Runs
 import io.mockk.every
 import io.mockk.just
@@ -89,7 +88,6 @@ class AuthHandlerTest {
         mockkObject(SessionManager)
         mockkObject(AuthorizedKeys)
         mockkObject(VenusConfig)
-        mockkObject(StatSubscriptionManager)
 
         every { VenusConfig.authTimeoutSeconds } returns 30
         every { VenusConfig.maxUsers } returns 10
@@ -101,8 +99,6 @@ class AuthHandlerTest {
         every { SessionManager.activate(any(), any()) } just Runs
         every { SessionManager.deactivate(any()) } just Runs
         every { SessionManager.getPending(any()) } returns null
-        every { StatSubscriptionManager.cancel(any()) } just Runs
-
         handler =
             AuthHandler(
                 plugin,
@@ -254,6 +250,5 @@ class AuthHandlerTest {
         handler.onPlayerQuit(player)
 
         verify { SessionManager.deactivate(uuid) }
-        verify { StatSubscriptionManager.cancel(uuid) }
     }
 }
