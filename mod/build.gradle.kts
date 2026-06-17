@@ -23,13 +23,16 @@ dependencies {
     modImplementation("net.fabricmc:fabric-loader:$fabricLoaderVersion")
     modImplementation("net.fabricmc.fabric-api:fabric-api:$fabricApiVersion")
     modImplementation("net.fabricmc:fabric-language-kotlin:$fabricLanguageKotlinVersion")
+    compileOnly("org.apache.logging.log4j:log4j-api:2.25.2")
+    compileOnly("org.apache.logging.log4j:log4j-core:2.25.2")
     implementation(project(":common"))
     implementation(project(":backend"))
     testImplementation(kotlin("test"))
+    testImplementation("io.mockk:mockk:1.13.10")
 }
 
 kotlin {
-    jvmToolchain(25)
+    jvmToolchain(21)
 }
 
 sourceSets {
@@ -104,4 +107,8 @@ loom {
         ideConfigGenerated(true)
         runDir = "run"
     }
+}
+
+tasks.withType<Test>().configureEach {
+    systemProperty("net.bytebuddy.experimental", "true")
 }

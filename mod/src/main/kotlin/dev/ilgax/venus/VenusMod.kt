@@ -65,7 +65,10 @@ class VenusMod : ClientModInitializer {
 
         ClientSendMessageEvents.ALLOW_CHAT.register { message ->
             if (SessionState.sessionActive && message.startsWith("$")) {
-                channelClient.sendConsoleCommand(message.removePrefix("$").trim())
+                val command = message.removePrefix("$").trim()
+                if (command.isNotBlank()) {
+                    channelClient.sendConsoleCommand(command)
+                }
                 false
             } else {
                 true

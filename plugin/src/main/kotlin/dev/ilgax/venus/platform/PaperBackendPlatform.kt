@@ -201,8 +201,11 @@ private class PaperBackendPlayers(
                 }
             "kill" ->
                 withOnlineTarget(target) { onlineTarget ->
-                    onlineTarget.health = 0.0
-                    ActionResult.success("Player killed.")
+                    if (plugin.server.dispatchCommand(plugin.server.consoleSender, "kill ${onlineTarget.name}")) {
+                        ActionResult.success("Player killed.")
+                    } else {
+                        ActionResult.failure("Kill command failed.")
+                    }
                 }
             "heal" ->
                 withOnlineTarget(target) { onlineTarget ->
@@ -291,7 +294,6 @@ private class PaperBackendPlayers(
             ?: plugin.server.whitelistedPlayers.firstOrNull { it.uniqueId == uuid }
             ?: plugin.server.bannedPlayers.firstOrNull { it.uniqueId == uuid }
             ?: plugin.server.offlinePlayers.firstOrNull { it.uniqueId == uuid }
-            ?: plugin.server.getOfflinePlayer(uuid)
 
     private fun PlayerActionPacket.toResult(
         success: Boolean,

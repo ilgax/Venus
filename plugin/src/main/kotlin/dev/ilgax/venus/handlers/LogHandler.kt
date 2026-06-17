@@ -39,6 +39,14 @@ class LogHandler {
         delegate = BackendLogHandler(platform, json)
     }
 
+    internal constructor(
+        plugin: JavaPlugin,
+        delegate: BackendLogHandler,
+    ) {
+        this.plugin = plugin
+        this.delegate = delegate
+    }
+
     fun start() {
         val context = LogManager.getContext(false) as LoggerContext
         val rootLogger = context.configuration.rootLogger

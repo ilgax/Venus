@@ -85,6 +85,20 @@ class BackendPacketRouterTest {
         verify { router.players.handleAction(player, data) }
     }
 
+    @Test
+    fun `handleCommand ignores valid json with invalid type shape`() {
+        val router = createRouter()
+        mockkObject(SessionManager)
+        every { SessionManager.isActive(player.uuid) } returns true
+        val data = """{"type":{}}"""
+
+        router.handleCommand(player, data)
+
+        verify(exactly = 0) { router.console.handle(any(), any()) }
+        verify(exactly = 0) { router.log.handleSubscribe(any(), any()) }
+        verify(exactly = 0) { router.players.handleAction(any(), any()) }
+    }
+
     private fun createRouter(): RouterFixture {
         val platform = mockk<BackendPlatform>(relaxed = true)
         val logger = mockk<BackendLogger>(relaxed = true)

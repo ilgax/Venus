@@ -48,11 +48,15 @@ class BackendPacketRouter(
                 return
             }
         val type =
-            jsonElement.jsonObject["type"]?.jsonPrimitive?.content
-                ?: run {
-                    platform.logger.warning("${player.name} sent cmd packet without type field")
-                    return
-                }
+            try {
+                jsonElement.jsonObject["type"]?.jsonPrimitive?.content
+            } catch (e: RuntimeException) {
+                platform.logger.warning("${player.name} sent malformed cmd packet: ${e.message}")
+                return
+            } ?: run {
+                platform.logger.warning("${player.name} sent cmd packet without type field")
+                return
+            }
 
         when (BackendCommandRoute.fromPacketType(type)) {
             BackendCommandRoute.CONSOLE_CMD -> consoleHandler.handle(player, data)

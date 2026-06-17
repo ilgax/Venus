@@ -14,26 +14,35 @@ import dev.ilgax.venus.network.VenusRawPayload
 import dev.ilgax.venus.network.VenusRawReadyPayload
 import dev.ilgax.venus.protocol.PlayerActionPacket
 import dev.ilgax.venus.protocol.PlayerActionResultPacket
+import dev.ilgax.venus.protocol.PlayerDetail
 import dev.ilgax.venus.protocol.PlayerDetailPacket
 import dev.ilgax.venus.protocol.PlayerListPacket
 import dev.ilgax.venus.protocol.PlayerSummaryPacket
-import dev.ilgax.venus.protocol.StatsPacket
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking
+import net.minecraft.network.chat.Component
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerPlayer
+import net.minecraft.server.permissions.LevelBasedPermissionSet
+import net.minecraft.server.players.NameAndId
+import net.minecraft.server.players.UserBanListEntry
+import net.minecraft.server.players.UserWhiteListEntry
+import net.minecraft.world.level.GameType
 import org.slf4j.Logger
-import java.lang.management.ManagementFactory
-import java.math.BigDecimal
-import java.math.RoundingMode
+import java.io.IOException
+import java.util.Date
 import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
 
 class FabricBackendPlatform(
     private val serverProvider: () -> MinecraftServer?,
     private val loggerDelegate: Logger,
+    private val configProvider: () -> BackendConfig,
 ) : BackendPlatform {
     override val logger: BackendLogger =
         object : BackendLogger {
@@ -48,7 +57,8 @@ class FabricBackendPlatform(
 
     private val schedulerImpl = FabricBackendScheduler()
     override val scheduler: BackendScheduler = schedulerImpl
-    override val config: BackendConfig = BackendConfig()
+    override val config: BackendConfig
+        get() = configProvider()
     private val players = FabricBackendPlayers(serverProvider)
     private val json = Json { explicitNulls = false }
 
@@ -87,31 +97,13 @@ class FabricBackendPlatform(
         player: BackendPlayer,
         command: String,
         output: (String) -> Unit,
-    ): Boolean {
-        val server = serverProvider() ?: return false
-        val source = server.createCommandSourceStack()
-        server.commands.performPrefixedCommand(source, command)
-        return true
-    }
+    ): Boolean =
+        serverProvider()?.let {
+            FabricCommandExecutor.execute(it, command, output)
+        } ?: false
 
-    override fun buildStatsJson(requestedStats: List<String>): String {
-        val server = serverProvider()
-        val packet =
-            StatsPacket(
-                type = "stats",
-                tps = if ("tps" in requestedStats) 20.0 else null,
-                mspt = if ("mspt" in requestedStats) null else null,
-                cpuLoad = if ("cpu" in requestedStats) cpuLoad() else null,
-                ramUsed = if ("ram" in requestedStats) ramUsed() else null,
-                ramMax = if ("ram" in requestedStats) ramMax() else null,
-                uptime = if ("uptime" in requestedStats) uptime() else null,
-                onlinePlayers = if ("players" in requestedStats) server?.playerCount else null,
-                maxPlayers = if ("players" in requestedStats) server?.maxPlayers else null,
-                serverName = if ("server" in requestedStats) server?.serverModName else null,
-                minecraftVersion = if ("server" in requestedStats) server?.serverVersion else null,
-            )
-        return json.encodeToString(packet)
-    }
+    override fun buildStatsJson(requestedStats: List<String>): String =
+        FabricStatsCollector.buildStatsJson(serverProvider(), requestedStats)
 
     override fun players(): BackendPlayers = players
 
@@ -122,20 +114,6 @@ class FabricBackendPlatform(
         serverProvider()?.playerList?.getPlayer(player.uuid)?.let {
             ServerPlayNetworking.send(it, payload)
         }
-    }
-
-    private fun ramUsed(): Long = (Runtime.getRuntime().let { it.totalMemory() - it.freeMemory() }) / 1024 / 1024
-
-    private fun ramMax(): Long = Runtime.getRuntime().maxMemory() / 1024 / 1024
-
-    private fun uptime(): Long = ManagementFactory.getRuntimeMXBean().uptime / 1000
-
-    private fun cpuLoad(): Double? {
-        val bean = ManagementFactory.getOperatingSystemMXBean()
-        if (bean !is com.sun.management.OperatingSystemMXBean) return null
-        val load = bean.processCpuLoad
-        if (load < 0.0) return null
-        return BigDecimal.valueOf((load * 100.0).coerceIn(0.0, 100.0)).setScale(1, RoundingMode.HALF_UP).toDouble()
     }
 }
 
@@ -197,37 +175,334 @@ private class FabricBackendPlayers(
 ) : BackendPlayers {
     override fun list(viewer: BackendPlayer): PlayerListPacket {
         val server = serverProvider()
+        val playerList = server?.playerList
         val onlinePlayers =
-            server
-                ?.playerList
+            playerList
                 ?.players
-                ?.map { PlayerSummaryPacket(it.uuid.toString(), it.name.string, it.name.string, true, false, false, false) }
+                ?.map { it.toSummary(playerList.isWhiteListed(it.nameAndId()), playerList.isOp(it.nameAndId()), isBlocked(it.nameAndId())) }
+                ?.sortedWith(playerSummaryComparator())
+                ?: emptyList()
+        val whitelistedPlayers =
+            playerList
+                ?.whiteList
+                ?.entries
+                ?.mapNotNull { entry ->
+                    entry.user?.let { identity ->
+                        identity.toSummary(
+                            online = false,
+                            whitelisted = true,
+                            operator = playerList.isOp(identity),
+                            blocked = isBlocked(identity),
+                        )
+                    }
+                }?.sortedWith(playerSummaryComparator())
+                ?: emptyList()
+        val blockedPlayers =
+            playerList
+                ?.bans
+                ?.entries
+                ?.mapNotNull { entry ->
+                    entry.user?.let { identity ->
+                        identity.toSummary(
+                            online = false,
+                            whitelisted = playerList.isWhiteListed(identity),
+                            operator = playerList.isOp(identity),
+                            blocked = true,
+                        )
+                    }
+                }?.sortedWith(playerSummaryComparator())
                 ?: emptyList()
         return PlayerListPacket(
             type = "player_list",
             onlineCount = onlinePlayers.size,
             maxPlayers = server?.maxPlayers ?: 0,
             onlinePlayers = onlinePlayers,
-            whitelistedPlayers = emptyList(),
-            blockedPlayers = emptyList(),
+            whitelistedPlayers = whitelistedPlayers,
+            blockedPlayers = blockedPlayers,
         )
     }
 
     override fun detail(
         viewer: BackendPlayer,
         uuid: UUID,
-    ): PlayerDetailPacket? = null
+    ): PlayerDetailPacket? {
+        val playerList = serverProvider()?.playerList ?: return null
+        val onlineTarget = playerList.getPlayer(uuid)
+        val identity =
+            onlineTarget?.nameAndId()
+                ?: playerList.whiteList.entries
+                    .firstOrNull { it.user?.id() == uuid }
+                    ?.user
+                ?: playerList.bans.entries
+                    .firstOrNull { it.user?.id() == uuid }
+                    ?.user
+                ?: return null
+        return PlayerDetailPacket(
+            type = "player_detail",
+            player =
+                PlayerDetail(
+                    uuid = identity.id().toString(),
+                    name = identity.name(),
+                    displayName = identity.name(),
+                    online = onlineTarget != null,
+                    operator = playerList.isOp(identity),
+                    whitelisted = playerList.isWhiteListed(identity),
+                    blocked = isBlocked(identity),
+                    gameMode =
+                        onlineTarget
+                            ?.gameMode
+                            ?.gameModeForPlayer
+                            ?.name
+                            ?.lowercase(),
+                    health = onlineTarget?.health?.toDouble(),
+                    maxHealth = onlineTarget?.maxHealth?.toDouble(),
+                    foodLevel = onlineTarget?.foodData?.foodLevel,
+                    level = onlineTarget?.experienceLevel,
+                    experienceProgress = onlineTarget?.experienceProgress,
+                    world =
+                        onlineTarget?.let { target ->
+                            target
+                                .level()
+                                .dimension()
+                                .identifier()
+                                .toString()
+                        },
+                    x = onlineTarget?.x,
+                    y = onlineTarget?.y,
+                    z = onlineTarget?.z,
+                ),
+        )
+    }
 
     override fun applyAction(
         viewer: BackendPlayer,
         packet: PlayerActionPacket,
+    ): PlayerActionResultPacket {
+        val playerList = serverProvider()?.playerList ?: return packet.toResult(false, "Server unavailable.")
+        val uuid =
+            try {
+                UUID.fromString(packet.uuid)
+            } catch (_: IllegalArgumentException) {
+                return packet.toResult(false, "Invalid player uuid.")
+            }
+        val viewerPlayer = playerList.getPlayer(viewer.uuid) ?: return packet.toResult(false, "Player not found.")
+        val targetIdentity =
+            playerList.getPlayer(uuid)?.nameAndId()
+                ?: playerList.whiteList.entries
+                    .firstOrNull { it.user?.id() == uuid }
+                    ?.user
+                ?: playerList.bans.entries
+                    .firstOrNull { it.user?.id() == uuid }
+                    ?.user
+                ?: return packet.toResult(false, "Player not found.")
+        val result = executeAction(playerList, viewerPlayer, targetIdentity, packet)
+        return packet.toResult(result.success, result.message)
+    }
+
+    private fun executeAction(
+        playerList: net.minecraft.server.players.PlayerList,
+        viewer: ServerPlayer,
+        targetIdentity: NameAndId,
+        packet: PlayerActionPacket,
+    ): ActionResult {
+        val targetPlayer = playerList.getPlayer(targetIdentity.id())
+        return when (packet.action) {
+            "kick" ->
+                withOnlineTarget(targetPlayer) { onlineTarget ->
+                    onlineTarget.connection.disconnect(Component.literal("Kicked by Venus."))
+                    ActionResult.success("Player kicked.")
+                }
+            "kill" ->
+                withOnlineTarget(targetPlayer) { onlineTarget ->
+                    executeServerCommand("kill ${onlineTarget.scoreboardName}")
+                    ActionResult.success("Player killed.")
+                }
+            "heal" ->
+                withOnlineTarget(targetPlayer) { onlineTarget ->
+                    onlineTarget.health = onlineTarget.maxHealth
+                    ActionResult.success("Player healed.")
+                }
+            "feed" ->
+                withOnlineTarget(targetPlayer) { onlineTarget ->
+                    onlineTarget.foodData.foodLevel = 20
+                    ActionResult.success("Player fed.")
+                }
+            "set_whitelisted" -> {
+                val value = packet.booleanValue() ?: return ActionResult.failure("Invalid whitelist value.")
+                if (value) {
+                    playerList.whiteList.add(UserWhiteListEntry(targetIdentity))
+                    persistWhitelist(playerList) ?: return ActionResult.failure("Failed to save whitelist.")
+                    ActionResult.success("Player whitelisted.")
+                } else {
+                    playerList.whiteList.remove(targetIdentity)
+                    persistWhitelist(playerList) ?: return ActionResult.failure("Failed to save whitelist.")
+                    ActionResult.success("Player removed from whitelist.")
+                }
+            }
+            "set_blocked" -> {
+                val value = packet.booleanValue() ?: return ActionResult.failure("Invalid blocked value.")
+                if (value) {
+                    playerList.bans.add(UserBanListEntry(targetIdentity, Date(), "Venus", null, "Banned by Venus."))
+                    persistBans(playerList) ?: return ActionResult.failure("Failed to save ban list.")
+                    targetPlayer?.connection?.disconnect(Component.literal("Banned by Venus."))
+                    ActionResult.success("Player banned.")
+                } else {
+                    playerList.bans.remove(targetIdentity)
+                    persistBans(playerList) ?: return ActionResult.failure("Failed to save ban list.")
+                    ActionResult.success("Player unbanned.")
+                }
+            }
+            "set_operator" -> {
+                val value = packet.booleanValue() ?: return ActionResult.failure("Invalid operator value.")
+                if (value) {
+                    playerList.op(targetIdentity, java.util.Optional.of(LevelBasedPermissionSet.ADMIN), java.util.Optional.of(false))
+                    persistOps(playerList) ?: return ActionResult.failure("Failed to save operator list.")
+                    ActionResult.success("Player made operator.")
+                } else {
+                    playerList.deop(targetIdentity)
+                    persistOps(playerList) ?: return ActionResult.failure("Failed to save operator list.")
+                    ActionResult.success("Player removed from operators.")
+                }
+            }
+            "set_game_mode" -> {
+                val gameMode = packet.gameModeValue() ?: return ActionResult.failure("Invalid game mode.")
+                withOnlineTarget(targetPlayer) { onlineTarget ->
+                    if (onlineTarget.setGameMode(gameMode)) {
+                        ActionResult.success("Game mode set to ${gameMode.name.lowercase()}.")
+                    } else {
+                        ActionResult.failure("Game mode change failed.")
+                    }
+                }
+            }
+            "teleport_admin_to_player" ->
+                withOnlineTarget(targetPlayer) { onlineTarget ->
+                    viewer.teleportTo(
+                        onlineTarget.level(),
+                        onlineTarget.x,
+                        onlineTarget.y,
+                        onlineTarget.z,
+                        setOf(),
+                        onlineTarget.yRot,
+                        onlineTarget.xRot,
+                        false,
+                    )
+                    ActionResult.success("Teleported to player.")
+                }
+            "teleport_player_to_admin" ->
+                withOnlineTarget(targetPlayer) { onlineTarget ->
+                    onlineTarget.teleportTo(
+                        viewer.level(),
+                        viewer.x,
+                        viewer.y,
+                        viewer.z,
+                        setOf(),
+                        viewer.yRot,
+                        viewer.xRot,
+                        false,
+                    )
+                    ActionResult.success("Teleported player to you.")
+                }
+            else -> ActionResult.failure("Unknown player action.")
+        }
+    }
+
+    private fun executeServerCommand(command: String) {
+        val server = serverProvider() ?: return
+        server.commands.performPrefixedCommand(server.createCommandSourceStack(), command)
+    }
+
+    private fun persistWhitelist(playerList: net.minecraft.server.players.PlayerList): Unit? =
+        try {
+            playerList.whiteList.save()
+            playerList.reloadWhiteList()
+        } catch (_: IOException) {
+            null
+        }
+
+    private fun persistBans(playerList: net.minecraft.server.players.PlayerList): Unit? =
+        try {
+            playerList.bans.save()
+        } catch (_: IOException) {
+            null
+        }
+
+    private fun persistOps(playerList: net.minecraft.server.players.PlayerList): Unit? =
+        try {
+            playerList.ops.save()
+        } catch (_: IOException) {
+            null
+        }
+
+    private fun withOnlineTarget(
+        target: ServerPlayer?,
+        action: (ServerPlayer) -> ActionResult,
+    ): ActionResult {
+        val onlineTarget = target ?: return ActionResult.failure("Player must be online.")
+        return action(onlineTarget)
+    }
+
+    private fun PlayerActionPacket.booleanValue(): Boolean? = value?.jsonPrimitive?.booleanOrNull
+
+    private fun PlayerActionPacket.gameModeValue(): GameType? =
+        when (value?.jsonPrimitive?.contentOrNull?.lowercase()) {
+            "survival" -> GameType.SURVIVAL
+            "creative" -> GameType.CREATIVE
+            "adventure" -> GameType.ADVENTURE
+            "spectator" -> GameType.SPECTATOR
+            else -> null
+        }
+
+    private fun NameAndId.toSummary(
+        online: Boolean,
+        whitelisted: Boolean,
+        operator: Boolean,
+        blocked: Boolean,
+    ): PlayerSummaryPacket? {
+        val playerName = name().takeIf { it.isNotBlank() } ?: return null
+        return PlayerSummaryPacket(
+            uuid = id().toString(),
+            name = playerName,
+            displayName = playerName,
+            online = online,
+            operator = operator,
+            whitelisted = whitelisted,
+            blocked = blocked,
+        )
+    }
+
+    private fun ServerPlayer.toSummary(
+        whitelisted: Boolean,
+        operator: Boolean,
+        blocked: Boolean,
+    ): PlayerSummaryPacket = nameAndId().toSummary(true, whitelisted, operator, blocked)!!
+
+    private fun isBlocked(identity: NameAndId): Boolean = serverProvider()?.playerList?.bans?.isBanned(identity) == true
+
+    private fun playerSummaryComparator(): Comparator<PlayerSummaryPacket> =
+        compareBy<PlayerSummaryPacket> { it.name.lowercase() }
+            .thenBy { it.uuid }
+
+    private fun PlayerActionPacket.toResult(
+        success: Boolean,
+        message: String,
     ): PlayerActionResultPacket =
         PlayerActionResultPacket(
             type = "player_action_result",
-            requestId = packet.requestId,
-            uuid = packet.uuid,
-            action = packet.action,
-            success = false,
-            message = "Fabric player actions are not implemented yet.",
+            requestId = requestId,
+            uuid = uuid,
+            action = action,
+            success = success,
+            message = message,
         )
+
+    private data class ActionResult(
+        val success: Boolean,
+        val message: String,
+    ) {
+        companion object {
+            fun success(message: String) = ActionResult(true, message)
+
+            fun failure(message: String) = ActionResult(false, message)
+        }
+    }
 }

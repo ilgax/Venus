@@ -1,14 +1,31 @@
 package dev.ilgax.venus.network
 
+import dev.ilgax.venus.protocol.VenusChannels
+import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry
 import net.minecraft.network.FriendlyByteBuf
 import net.minecraft.network.codec.StreamCodec
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload
 import net.minecraft.resources.Identifier
 
+object VenusPayloads {
+    fun registerPayloadTypes() {
+        PayloadTypeRegistry.playC2S().register(HelloPayload.TYPE, HelloPayload.CODEC)
+        PayloadTypeRegistry.playC2S().register(ClientKeyPayload.TYPE, ClientKeyPayload.CODEC)
+        PayloadTypeRegistry.playC2S().register(AuthResponsePayload.TYPE, AuthResponsePayload.CODEC)
+        PayloadTypeRegistry.playC2S().register(ErrorPayload.TYPE, ErrorPayload.CODEC)
+        PayloadTypeRegistry.playC2S().register(CmdPayload.TYPE, CmdPayload.CODEC)
+        PayloadTypeRegistry.playS2C().register(ErrorPayload.TYPE, ErrorPayload.CODEC)
+        PayloadTypeRegistry.playS2C().register(VenusRawPayload.TYPE, VenusRawPayload.CODEC)
+        PayloadTypeRegistry.playS2C().register(VenusRawAuthPayload.TYPE, VenusRawAuthPayload.CODEC)
+        PayloadTypeRegistry.playS2C().register(VenusRawReadyPayload.TYPE, VenusRawReadyPayload.CODEC)
+        PayloadTypeRegistry.playS2C().register(VenusRawDataPayload.TYPE, VenusRawDataPayload.CODEC)
+    }
+}
+
 data object HelloPayload : CustomPacketPayload {
     val TYPE =
         CustomPacketPayload.Type<HelloPayload>(
-            Identifier.fromNamespaceAndPath("venus", "hello"),
+            channelId(VenusChannels.HELLO),
         )
     val CODEC: StreamCodec<FriendlyByteBuf, HelloPayload> =
         StreamCodec.unit(HelloPayload)
@@ -22,7 +39,7 @@ data class ClientKeyPayload(
     companion object {
         val TYPE =
             CustomPacketPayload.Type<ClientKeyPayload>(
-                Identifier.fromNamespaceAndPath("venus", "key"),
+                channelId(VenusChannels.KEY),
             )
         val CODEC: StreamCodec<FriendlyByteBuf, ClientKeyPayload> = textCodec(::ClientKeyPayload) { it.data }
     }
@@ -36,7 +53,7 @@ data class AuthResponsePayload(
     companion object {
         val TYPE =
             CustomPacketPayload.Type<AuthResponsePayload>(
-                Identifier.fromNamespaceAndPath("venus", "auth"),
+                channelId(VenusChannels.AUTH),
             )
         val CODEC: StreamCodec<FriendlyByteBuf, AuthResponsePayload> = textCodec(::AuthResponsePayload) { it.data }
     }
@@ -50,7 +67,7 @@ data class ErrorPayload(
     companion object {
         val TYPE =
             CustomPacketPayload.Type<ErrorPayload>(
-                Identifier.fromNamespaceAndPath("venus", "error"),
+                channelId(VenusChannels.ERROR),
             )
         val CODEC: StreamCodec<FriendlyByteBuf, ErrorPayload> = textCodec(::ErrorPayload) { it.data }
     }
@@ -64,7 +81,7 @@ data class CmdPayload(
     companion object {
         val TYPE =
             CustomPacketPayload.Type<CmdPayload>(
-                Identifier.fromNamespaceAndPath("venus", "cmd"),
+                channelId(VenusChannels.CMD),
             )
         val CODEC: StreamCodec<FriendlyByteBuf, CmdPayload> = textCodec(::CmdPayload) { it.data }
     }
@@ -84,3 +101,5 @@ private fun <T : CustomPacketPayload> textCodec(
             create(bytes.toString(Charsets.UTF_8))
         },
     )
+
+private fun channelId(channel: String): Identifier = Identifier.fromNamespaceAndPath("venus", channel.substringAfter(':'))

@@ -63,6 +63,7 @@ object PlayersTab {
         activeCategory: PlayerCategory,
         selectedUuid: String?,
         scrollOffset: Int,
+        pendingPlayerAction: String? = null,
     ): PlayersTabHitResult {
         var hitResult = PlayersTabHitResult()
 
@@ -93,7 +94,7 @@ object PlayersTab {
 
             val detail = SessionState.latestPlayerDetail
             if (detail != null && detail.uuid == selectedUuid) {
-                val actionClick = hitTestDetailPane(mouseX, mouseY, detailContentRect, detail)
+                val actionClick = hitTestDetailPane(mouseX, mouseY, detailContentRect, detail, pendingPlayerAction)
                 if (actionClick != null) {
                     hitResult = hitResult.copy(playerActionClicked = actionClick)
                 }
@@ -512,7 +513,9 @@ object PlayersTab {
         mouseY: Int,
         rect: Rect,
         detail: PlayerDetail,
+        pendingPlayerAction: String?,
     ): PlayerActionClick? {
+        if (pendingPlayerAction != null) return null
         val layout = detailLayout(rect)
 
         if (detail.online) {
@@ -575,10 +578,6 @@ object PlayersTab {
         renderSectionBackground(guiGraphics, layout.gameModeRect)
         renderSectionBackground(guiGraphics, layout.controlRect)
         renderSectionBackground(guiGraphics, layout.infoRect)
-        if (layout.inventoryRect.height > MIN_PLACEHOLDER_SECTION_HEIGHT) {
-            renderSectionBackground(guiGraphics, layout.inventoryRect)
-            drawCenteredString(guiGraphics, font, "Inventory placeholder", layout.inventoryRect, COLOR_MUTED)
-        }
 
         val healthContentX = layout.healthRect.x + SECTION_PADDING
         var healthContentY = layout.healthRect.y + SECTION_PADDING

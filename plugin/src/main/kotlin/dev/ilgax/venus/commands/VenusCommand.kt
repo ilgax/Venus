@@ -1,17 +1,15 @@
 package dev.ilgax.venus.commands
 
 import dev.ilgax.venus.VenusPlugin
-import dev.ilgax.venus.auth.AuthorizedKeys
-import dev.ilgax.venus.auth.SessionManager
+import dev.ilgax.venus.backend.BackendApprovalService
 import dev.ilgax.venus.config.VenusConfig
-import dev.ilgax.venus.handlers.AuthHandler
 import io.papermc.paper.command.brigadier.BasicCommand
 import io.papermc.paper.command.brigadier.CommandSourceStack
 import org.bukkit.command.ConsoleCommandSender
 
 class VenusCommand(
     private val plugin: VenusPlugin,
-    private val authHandler: AuthHandler,
+    private val approvals: BackendApprovalService,
 ) : BasicCommand {
     override fun execute(
         stack: CommandSourceStack,
@@ -53,38 +51,10 @@ class VenusCommand(
     }
 
     private fun handleAllow(sender: org.bukkit.command.CommandSender) {
-        val entry = SessionManager.getNextPendingApproval()
-        if (entry == null) {
-            sender.sendMessage("No pending Venus requests.")
-            return
-        }
-        val (uuid, approval) = entry
-        val player = plugin.server.getPlayer(uuid)
-        if (player == null) {
-            SessionManager.removePendingApproval(uuid)
-            sender.sendMessage("Player is no longer online.")
-            return
-        }
-        AuthorizedKeys.authorize(approval.clientPublicKeyBase64, player.name)
-        SessionManager.removePendingApproval(uuid)
-        authHandler.startApprovedChallenge(player, approval.clientPublicKey)
-        sender.sendMessage("${player.name} authorized.")
-        plugin.logger.info("${player.name} authorized via console.")
+        sender.sendMessage(approvals.allowNextPending().message)
     }
 
     private fun handleDeny(sender: org.bukkit.command.CommandSender) {
-        val entry = SessionManager.getNextPendingApproval()
-        if (entry == null) {
-            sender.sendMessage("No pending Venus requests.")
-            return
-        }
-        val (uuid, _) = entry
-        val player = plugin.server.getPlayer(uuid)
-        val playerName = player?.name ?: uuid.toString()
-        SessionManager.removePendingApproval(uuid)
-        if (player != null) {
-            authHandler.notifyDenied(player)
-        }
-        sender.sendMessage("$playerName denied.")
+        sender.sendMessage(approvals.denyNextPending().message)
     }
 }

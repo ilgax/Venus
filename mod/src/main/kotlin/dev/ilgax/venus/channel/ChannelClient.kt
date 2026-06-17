@@ -3,6 +3,12 @@ package dev.ilgax.venus.channel
 import dev.ilgax.venus.auth.Handshake
 import dev.ilgax.venus.auth.KeyManager
 import dev.ilgax.venus.auth.ServerKeyStore
+import dev.ilgax.venus.network.AuthResponsePayload
+import dev.ilgax.venus.network.ClientKeyPayload
+import dev.ilgax.venus.network.CmdPayload
+import dev.ilgax.venus.network.ErrorPayload
+import dev.ilgax.venus.network.HelloPayload
+import dev.ilgax.venus.network.VenusPayloads
 import dev.ilgax.venus.network.VenusRawAuthPayload
 import dev.ilgax.venus.network.VenusRawDataPayload
 import dev.ilgax.venus.network.VenusRawPayload
@@ -21,13 +27,8 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking
-import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry
 import net.minecraft.client.Minecraft
 import net.minecraft.client.multiplayer.resolver.ServerAddress
-import net.minecraft.network.FriendlyByteBuf
-import net.minecraft.network.codec.StreamCodec
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload
-import net.minecraft.resources.Identifier
 import java.util.Base64
 import java.util.UUID
 
@@ -37,84 +38,8 @@ class ChannelClient(
     private val log: (String) -> Unit,
     private val showAuthFailure: (String) -> Unit = {},
 ) {
-    data object HelloPayload : CustomPacketPayload {
-        val TYPE =
-            CustomPacketPayload.Type<HelloPayload>(
-                Identifier.fromNamespaceAndPath("venus", "hello"),
-            )
-        val CODEC: StreamCodec<FriendlyByteBuf, HelloPayload> =
-            StreamCodec.unit(HelloPayload)
-
-        override fun type(): CustomPacketPayload.Type<HelloPayload> = TYPE
-    }
-
-    data class ClientKeyPayload(
-        val data: String,
-    ) : CustomPacketPayload {
-        companion object {
-            val TYPE =
-                CustomPacketPayload.Type<ClientKeyPayload>(
-                    Identifier.fromNamespaceAndPath("venus", "key"),
-                )
-            val CODEC: StreamCodec<FriendlyByteBuf, ClientKeyPayload> = textCodec(::ClientKeyPayload) { it.data }
-        }
-
-        override fun type() = TYPE
-    }
-
-    data class AuthResponsePayload(
-        val data: String,
-    ) : CustomPacketPayload {
-        companion object {
-            val TYPE =
-                CustomPacketPayload.Type<AuthResponsePayload>(
-                    Identifier.fromNamespaceAndPath("venus", "auth"),
-                )
-            val CODEC: StreamCodec<FriendlyByteBuf, AuthResponsePayload> = textCodec(::AuthResponsePayload) { it.data }
-        }
-
-        override fun type() = TYPE
-    }
-
-    data class ErrorPayload(
-        val data: String,
-    ) : CustomPacketPayload {
-        companion object {
-            val TYPE =
-                CustomPacketPayload.Type<ErrorPayload>(
-                    Identifier.fromNamespaceAndPath("venus", "error"),
-                )
-            val CODEC: StreamCodec<FriendlyByteBuf, ErrorPayload> = textCodec(::ErrorPayload) { it.data }
-        }
-
-        override fun type() = TYPE
-    }
-
-    data class CmdPayload(
-        val data: String,
-    ) : CustomPacketPayload {
-        companion object {
-            val TYPE =
-                CustomPacketPayload.Type<CmdPayload>(
-                    Identifier.fromNamespaceAndPath("venus", "cmd"),
-                )
-            val CODEC: StreamCodec<FriendlyByteBuf, CmdPayload> = textCodec(::CmdPayload) { it.data }
-        }
-
-        override fun type() = TYPE
-    }
-
     fun register(packetHandler: PacketHandler) {
-        PayloadTypeRegistry.playC2S().register(HelloPayload.TYPE, HelloPayload.CODEC)
-        PayloadTypeRegistry.playC2S().register(ClientKeyPayload.TYPE, ClientKeyPayload.CODEC)
-        PayloadTypeRegistry.playC2S().register(AuthResponsePayload.TYPE, AuthResponsePayload.CODEC)
-        PayloadTypeRegistry.playC2S().register(ErrorPayload.TYPE, ErrorPayload.CODEC)
-        PayloadTypeRegistry.playC2S().register(CmdPayload.TYPE, CmdPayload.CODEC)
-        PayloadTypeRegistry.playS2C().register(ErrorPayload.TYPE, ErrorPayload.CODEC)
-        PayloadTypeRegistry.playS2C().register(VenusRawPayload.TYPE, VenusRawPayload.CODEC)
-        PayloadTypeRegistry.playS2C().register(VenusRawAuthPayload.TYPE, VenusRawAuthPayload.CODEC)
-        PayloadTypeRegistry.playS2C().register(VenusRawReadyPayload.TYPE, VenusRawReadyPayload.CODEC)
-        PayloadTypeRegistry.playS2C().register(VenusRawDataPayload.TYPE, VenusRawDataPayload.CODEC)
+        VenusPayloads.registerPayloadTypes()
 
         ClientPlayNetworking.registerGlobalReceiver(VenusRawPayload.TYPE) { payload, _ ->
             handleServerKey(payload.bytes().toString(Charsets.UTF_8))
@@ -183,39 +108,37 @@ class ChannelClient(
         uuid: String,
         action: String,
         value: JsonElement? = null,
-    ) {
+    ): String {
+        val requestId =
+            UUID
+                .randomUUID()
+                .toString()
         val data =
             json.encodeToString(
                 PlayerActionPacket.serializer(),
                 PlayerActionPacket(
                     type = "player_action",
-                    requestId =
-                        UUID
-                            .randomUUID()
-                            .toString(),
+                    requestId = requestId,
                     uuid = uuid,
                     action = action,
                     value = value,
                 ),
             )
         sendCommand(data)
+        return requestId
     }
 
     fun sendPlayerAction(
         uuid: String,
         action: String,
         value: Boolean,
-    ) {
-        sendPlayerAction(uuid, action, JsonPrimitive(value))
-    }
+    ): String = sendPlayerAction(uuid, action, JsonPrimitive(value))
 
     fun sendPlayerAction(
         uuid: String,
         action: String,
         value: String,
-    ) {
-        sendPlayerAction(uuid, action, JsonPrimitive(value))
-    }
+    ): String = sendPlayerAction(uuid, action, JsonPrimitive(value))
 
     private fun handleServerKey(data: String) {
         val packet =
@@ -349,20 +272,5 @@ class ChannelClient(
             host = ServerKeyStore.normalizeHost(host),
             port = address.port,
         )
-    }
-
-    companion object {
-        private fun <T : CustomPacketPayload> textCodec(
-            create: (String) -> T,
-            extract: (T) -> String,
-        ): StreamCodec<FriendlyByteBuf, T> =
-            StreamCodec.of(
-                { buf, payload -> buf.writeBytes(extract(payload).toByteArray(Charsets.UTF_8)) },
-                { buf ->
-                    val bytes = ByteArray(buf.readableBytes())
-                    buf.readBytes(bytes)
-                    create(bytes.toString(Charsets.UTF_8))
-                },
-            )
     }
 }

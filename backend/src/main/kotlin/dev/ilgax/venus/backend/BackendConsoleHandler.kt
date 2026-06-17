@@ -21,6 +21,10 @@ class BackendConsoleHandler(
                 platform.logger.warning("${player.name} sent malformed console_cmd packet: ${e.message}")
                 return
             }
+        if (packet.command.isBlank()) {
+            platform.logger.warning("${player.name} sent blank console command - ignoring")
+            return
+        }
         val executionLog = "${player.name} executed console command: ${packet.command}"
         suppressOwnExecutionLog(player, executionLog)
         platform.logger.info(executionLog)

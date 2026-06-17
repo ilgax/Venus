@@ -26,6 +26,7 @@ class BackendAuthHandler(
     private val subscriptions: BackendStatSubscriptionManager,
 ) {
     private val sessionTimeoutTasks = ConcurrentHashMap<UUID, BackendTask>()
+    private val approvalTimeoutTasks = ConcurrentHashMap<UUID, BackendTask>()
 
     fun handleHello(player: BackendPlayer) {
         sessionTimeoutTasks.remove(player.uuid)?.cancel()
@@ -77,19 +78,10 @@ class BackendAuthHandler(
                 return
             }
 
-            SessionManager.addPendingApproval(
-                player.uuid,
-                PendingApproval(clientPublicKey, clientPublicKeyBase64),
-            )
+            val approval = PendingApproval(clientPublicKey, clientPublicKeyBase64)
+            SessionManager.addPendingApproval(player.uuid, approval)
             platform.logger.info("${player.name} wants to connect to Venus. Type 'venus allow' or 'venus deny'")
-
-            platform.scheduler.runLater(platform.config.authTimeoutSeconds * 20L) {
-                if (SessionManager.getPendingApproval(player.uuid) != null) {
-                    platform.player(player.uuid)?.let { sendAuthError(it, "auth_timeout") }
-                    SessionManager.removePendingApproval(player.uuid)
-                    platform.logger.info("Venus request from ${player.name} timed out.")
-                }
-            }
+            scheduleApprovalTimeout(player, approval)
         }
     }
 
@@ -196,24 +188,33 @@ class BackendAuthHandler(
         player: BackendPlayer,
         clientPublicKey: PublicKey,
     ) {
-        startChallenge(player, clientPublicKey, expireChallenge = false)
+        startChallenge(player, clientPublicKey, expireChallenge = true)
     }
 
     fun notifyDenied(player: BackendPlayer) {
         sendAuthError(player, "auth_denied")
     }
 
-    fun onPlayerQuit(player: BackendPlayer) {
-        if (!SessionManager.isActive(player.uuid)) return
+    fun cancelPendingApproval(uuid: UUID) {
+        approvalTimeoutTasks.remove(uuid)?.cancel()
+    }
 
+    fun onPlayerQuit(player: BackendPlayer) {
+        approvalTimeoutTasks.remove(player.uuid)?.cancel()
         sessionTimeoutTasks.remove(player.uuid)?.cancel()
-        SessionManager.deactivate(player.uuid)
-        subscriptions.cancel(player.uuid)
+        SessionManager.removePendingApproval(player.uuid)
+        SessionManager.removePending(player.uuid)
+        if (SessionManager.isActive(player.uuid)) {
+            SessionManager.deactivate(player.uuid)
+            subscriptions.cancel(player.uuid)
+        }
     }
 
     fun cancelAllTimeouts() {
         sessionTimeoutTasks.values.forEach { it.cancel() }
         sessionTimeoutTasks.clear()
+        approvalTimeoutTasks.values.forEach { it.cancel() }
+        approvalTimeoutTasks.clear()
     }
 
     private fun startChallenge(
@@ -221,6 +222,8 @@ class BackendAuthHandler(
         clientPublicKey: PublicKey,
         expireChallenge: Boolean,
     ) {
+        approvalTimeoutTasks.remove(player.uuid)?.cancel()
+        SessionManager.removePendingApproval(player.uuid)
         val challenge = Handshake.generateChallenge()
         val serverSig = Handshake.sign(challenge, keyManager.privateKey)
         SessionManager.addPending(player.uuid, PendingSession(clientPublicKey, challenge))
@@ -247,6 +250,24 @@ class BackendAuthHandler(
                     platform.logger.info("Auth challenge expired for ${player.name}")
                 }
                 sessionTimeoutTasks.remove(uuid)
+            }
+    }
+
+    private fun scheduleApprovalTimeout(
+        player: BackendPlayer,
+        approval: PendingApproval,
+    ) {
+        val uuid = player.uuid
+        approvalTimeoutTasks[uuid]?.cancel()
+        approvalTimeoutTasks[uuid] =
+            platform.scheduler.runLater(platform.config.authTimeoutSeconds * 20L) {
+                val currentApproval = SessionManager.getPendingApproval(uuid)
+                if (currentApproval?.requestId == approval.requestId) {
+                    platform.player(uuid)?.let { sendAuthError(it, "auth_timeout") }
+                    SessionManager.removePendingApproval(uuid)
+                    platform.logger.info("Venus request from ${player.name} timed out.")
+                }
+                approvalTimeoutTasks.remove(uuid)
             }
     }
 

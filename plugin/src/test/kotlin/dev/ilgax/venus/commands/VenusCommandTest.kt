@@ -1,20 +1,17 @@
 package dev.ilgax.venus.commands
 
 import dev.ilgax.venus.VenusPlugin
-import dev.ilgax.venus.auth.AuthorizedKeys
-import dev.ilgax.venus.auth.SessionManager
+import dev.ilgax.venus.backend.BackendApprovalResult
+import dev.ilgax.venus.backend.BackendApprovalService
 import dev.ilgax.venus.config.VenusConfig
-import dev.ilgax.venus.handlers.AuthHandler
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkAll
 import io.mockk.verify
 import io.papermc.paper.command.brigadier.CommandSourceStack
-import org.bukkit.Server
 import org.bukkit.command.ConsoleCommandSender
 import org.bukkit.entity.Player
-import java.util.UUID
 import java.util.logging.Logger
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -22,8 +19,7 @@ import kotlin.test.Test
 
 class VenusCommandTest {
     private lateinit var plugin: VenusPlugin
-    private lateinit var authHandler: AuthHandler
-    private lateinit var server: Server
+    private lateinit var approvals: BackendApprovalService
     private lateinit var stack: CommandSourceStack
     private lateinit var consoleSender: ConsoleCommandSender
     private lateinit var playerSender: Player
@@ -32,21 +28,17 @@ class VenusCommandTest {
     @BeforeTest
     fun setup() {
         plugin = mockk(relaxed = true)
-        authHandler = mockk(relaxed = true)
-        server = mockk(relaxed = true)
+        approvals = mockk(relaxed = true)
         stack = mockk(relaxed = true)
         consoleSender = mockk(relaxed = true)
         playerSender = mockk(relaxed = true)
 
-        every { plugin.server } returns server
         every { plugin.logger } returns Logger.getAnonymousLogger()
         every { consoleSender.sendMessage(any<String>()) } returns Unit
         every { playerSender.sendMessage(any<String>()) } returns Unit
 
-        command = VenusCommand(plugin, authHandler)
+        command = VenusCommand(plugin, approvals)
 
-        mockkObject(SessionManager)
-        mockkObject(AuthorizedKeys)
         mockkObject(VenusConfig)
     }
 
@@ -100,7 +92,11 @@ class VenusCommandTest {
     @Test
     fun `allow with no pending requests`() {
         every { stack.sender } returns consoleSender
-        every { SessionManager.getNextPendingApproval() } returns null
+        every { approvals.allowNextPending() } returns
+            BackendApprovalResult(
+                success = false,
+                message = "No pending Venus requests.",
+            )
 
         command.execute(stack, arrayOf("allow"))
 
@@ -110,7 +106,11 @@ class VenusCommandTest {
     @Test
     fun `deny with no pending requests`() {
         every { stack.sender } returns consoleSender
-        every { SessionManager.getNextPendingApproval() } returns null
+        every { approvals.denyNextPending() } returns
+            BackendApprovalResult(
+                success = false,
+                message = "No pending Venus requests.",
+            )
 
         command.execute(stack, arrayOf("deny"))
 
@@ -119,19 +119,15 @@ class VenusCommandTest {
 
     @Test
     fun `deny with pending request removes it`() {
-        val uuid = UUID.randomUUID()
-        val approval = mockk<dev.ilgax.venus.auth.PendingApproval>()
-        val player = mockk<Player>(relaxed = true)
         every { stack.sender } returns consoleSender
-        every { SessionManager.getNextPendingApproval() } returns java.util.AbstractMap.SimpleEntry(uuid, approval)
-        every { server.getPlayer(uuid) } returns player
-        every { player.name } returns "DeniedPlayer"
-        every { SessionManager.removePendingApproval(uuid) } returns approval
+        every { approvals.denyNextPending() } returns
+            BackendApprovalResult(
+                success = true,
+                message = "DeniedPlayer denied.",
+            )
 
         command.execute(stack, arrayOf("deny"))
 
-        verify { SessionManager.removePendingApproval(uuid) }
-        verify { authHandler.notifyDenied(player) }
         verify { consoleSender.sendMessage("DeniedPlayer denied.") }
     }
 
@@ -152,40 +148,29 @@ class VenusCommandTest {
 
     @Test
     fun `allow with offline player removes approval`() {
-        val uuid = UUID.randomUUID()
-        val approval = mockk<dev.ilgax.venus.auth.PendingApproval>()
         every { stack.sender } returns consoleSender
-        every { SessionManager.getNextPendingApproval() } returns java.util.AbstractMap.SimpleEntry(uuid, approval)
-        every { server.getPlayer(uuid) } returns null
-        every { SessionManager.removePendingApproval(uuid) } returns approval
+        every { approvals.allowNextPending() } returns
+            BackendApprovalResult(
+                success = false,
+                message = "Player is no longer online.",
+            )
 
         command.execute(stack, arrayOf("allow"))
 
-        verify { SessionManager.removePendingApproval(uuid) }
         verify { consoleSender.sendMessage("Player is no longer online.") }
     }
 
     @Test
     fun `allow with online player authorizes and starts challenge`() {
-        val uuid = UUID.randomUUID()
-        val approval = mockk<dev.ilgax.venus.auth.PendingApproval>()
-        val mockPlayer = mockk<Player>()
-        val pubKeyBytes = mockk<java.security.PublicKey>()
-
         every { stack.sender } returns consoleSender
-        every { SessionManager.getNextPendingApproval() } returns java.util.AbstractMap.SimpleEntry(uuid, approval)
-        every { server.getPlayer(uuid) } returns mockPlayer
-        every { mockPlayer.name } returns "TestPlayer"
-        every { approval.clientPublicKeyBase64 } returns "base64key"
-        every { approval.clientPublicKey } returns pubKeyBytes
-        every { SessionManager.removePendingApproval(uuid) } returns approval
-        every { AuthorizedKeys.authorize(any(), any()) } returns Unit
+        every { approvals.allowNextPending() } returns
+            BackendApprovalResult(
+                success = true,
+                message = "TestPlayer authorized.",
+            )
 
         command.execute(stack, arrayOf("allow"))
 
-        verify { AuthorizedKeys.authorize("base64key", "TestPlayer") }
-        verify { SessionManager.removePendingApproval(uuid) }
-        verify { authHandler.startApprovedChallenge(mockPlayer, pubKeyBytes) }
         verify { consoleSender.sendMessage("TestPlayer authorized.") }
     }
 }

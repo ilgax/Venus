@@ -78,6 +78,28 @@ class SessionManagerTest {
     }
 
     @Test
+    fun `getNextPendingApproval skips stale queue entries`() {
+        val uuid1 = UUID.randomUUID()
+        val uuid2 = UUID.randomUUID()
+        val approval1 = PendingApproval(keyPair.public, "key1")
+        val approval2 = PendingApproval(keyPair.public, "key2")
+        try {
+            SessionManager.addPendingApproval(uuid1, approval1)
+            SessionManager.addPendingApproval(uuid2, approval2)
+            SessionManager.removePendingApproval(uuid1)
+
+            val next = SessionManager.getNextPendingApproval()
+
+            assertNotNull(next)
+            assertEquals(uuid2, next.key)
+            assertEquals(approval2, next.value)
+        } finally {
+            SessionManager.removePendingApproval(uuid1)
+            SessionManager.removePendingApproval(uuid2)
+        }
+    }
+
+    @Test
     fun `getNextPendingApproval returns null when empty`() {
         assertNull(SessionManager.getNextPendingApproval())
     }

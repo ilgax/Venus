@@ -19,13 +19,14 @@ class PanelScreen(
     private val subscribeLogs: () -> Unit,
     private val requestPlayerList: () -> Unit,
     private val requestPlayerDetail: (String) -> Unit,
-    private val sendPlayerAction: (String, String, Any?) -> Unit,
+    private val sendPlayerAction: (String, String, Any?) -> String,
 ) : Screen(Component.translatable("screen.venus.panel")) {
     private var activeTab = PanelTab.OVERVIEW
     private var hasRequestedPlayersList = false
     private var selectedPlayerCategory = PlayerCategory.ONLINE
     private var selectedPlayerUuid: String? = null
     private var pendingPlayerAction: String? = null
+    private var pendingPlayerActionRequestId: String? = null
     private var playersScrollOffset = 0
     private var logsSubscribed = false
     private var consoleScrollOffset = 0
@@ -157,6 +158,7 @@ class PanelScreen(
                     selectedPlayerCategory,
                     selectedPlayerUuid,
                     playersScrollOffset,
+                    pendingPlayerAction,
                 )
             val listBounds = hit.listBounds
             if (
@@ -282,10 +284,10 @@ class PanelScreen(
             }
 
             if (hit.playerActionClicked != null) {
-                if (SessionState.sessionActive && selectedPlayerUuid != null) {
+                if (SessionState.sessionActive && selectedPlayerUuid != null && pendingPlayerActionRequestId == null) {
                     val action = hit.playerActionClicked.action
                     val value = hit.playerActionClicked.value
-                    sendPlayerAction(selectedPlayerUuid!!, action, value)
+                    pendingPlayerActionRequestId = sendPlayerAction(selectedPlayerUuid!!, action, value)
                     pendingPlayerAction = action
                 }
                 return true
@@ -369,8 +371,9 @@ class PanelScreen(
                     hasRequestedPlayersList = true
                 }
 
-                if (SessionState.latestPlayerActionResult?.action == pendingPlayerAction) {
+                if (SessionState.latestPlayerActionResult?.requestId == pendingPlayerActionRequestId) {
                     pendingPlayerAction = null
+                    pendingPlayerActionRequestId = null
                 }
 
                 val list = SessionState.latestPlayerList

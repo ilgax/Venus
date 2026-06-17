@@ -1,5 +1,10 @@
 package dev.ilgax.venus.channel
 
+import dev.ilgax.venus.network.AuthResponsePayload
+import dev.ilgax.venus.network.ClientKeyPayload
+import dev.ilgax.venus.network.CmdPayload
+import dev.ilgax.venus.network.ErrorPayload
+import dev.ilgax.venus.network.HelloPayload
 import io.netty.buffer.Unpooled
 import net.minecraft.network.FriendlyByteBuf
 import org.junit.Test
@@ -8,56 +13,56 @@ import kotlin.test.assertEquals
 class ChannelClientTest {
     @Test
     fun `HelloPayload codec works`() {
-        val payload = ChannelClient.HelloPayload
+        val payload = HelloPayload
         assertEquals("venus:hello", payload.type().id().toString())
 
         val buf = FriendlyByteBuf(Unpooled.buffer())
-        ChannelClient.HelloPayload.CODEC.encode(buf, payload)
-        val decoded = ChannelClient.HelloPayload.CODEC.decode(buf)
+        HelloPayload.CODEC.encode(buf, payload)
+        val decoded = HelloPayload.CODEC.decode(buf)
         assertEquals(payload, decoded)
     }
 
     @Test
     fun `ClientKeyPayload codec works`() {
-        val payload = ChannelClient.ClientKeyPayload("test_key")
+        val payload = ClientKeyPayload("test_key")
         assertEquals("venus:key", payload.type().id().toString())
 
         val buf = FriendlyByteBuf(Unpooled.buffer())
-        ChannelClient.ClientKeyPayload.CODEC.encode(buf, payload)
-        val decoded = ChannelClient.ClientKeyPayload.CODEC.decode(buf)
+        ClientKeyPayload.CODEC.encode(buf, payload)
+        val decoded = ClientKeyPayload.CODEC.decode(buf)
         assertEquals(payload.data, decoded.data)
     }
 
     @Test
     fun `AuthResponsePayload codec works`() {
-        val payload = ChannelClient.AuthResponsePayload("test_auth")
+        val payload = AuthResponsePayload("test_auth")
         assertEquals("venus:auth", payload.type().id().toString())
 
         val buf = FriendlyByteBuf(Unpooled.buffer())
-        ChannelClient.AuthResponsePayload.CODEC.encode(buf, payload)
-        val decoded = ChannelClient.AuthResponsePayload.CODEC.decode(buf)
+        AuthResponsePayload.CODEC.encode(buf, payload)
+        val decoded = AuthResponsePayload.CODEC.decode(buf)
         assertEquals(payload.data, decoded.data)
     }
 
     @Test
     fun `ErrorPayload codec works`() {
-        val payload = ChannelClient.ErrorPayload("test_error")
+        val payload = ErrorPayload("test_error")
         assertEquals("venus:error", payload.type().id().toString())
 
         val buf = FriendlyByteBuf(Unpooled.buffer())
-        ChannelClient.ErrorPayload.CODEC.encode(buf, payload)
-        val decoded = ChannelClient.ErrorPayload.CODEC.decode(buf)
+        ErrorPayload.CODEC.encode(buf, payload)
+        val decoded = ErrorPayload.CODEC.decode(buf)
         assertEquals(payload.data, decoded.data)
     }
 
     @Test
     fun `CmdPayload codec works`() {
-        val payload = ChannelClient.CmdPayload("test_cmd")
+        val payload = CmdPayload("test_cmd")
         assertEquals("venus:cmd", payload.type().id().toString())
 
         val buf = FriendlyByteBuf(Unpooled.buffer())
-        ChannelClient.CmdPayload.CODEC.encode(buf, payload)
-        val decoded = ChannelClient.CmdPayload.CODEC.decode(buf)
+        CmdPayload.CODEC.encode(buf, payload)
+        val decoded = CmdPayload.CODEC.decode(buf)
         assertEquals(payload.data, decoded.data)
     }
 }

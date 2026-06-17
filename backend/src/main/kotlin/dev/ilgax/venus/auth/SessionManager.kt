@@ -1,7 +1,9 @@
 package dev.ilgax.venus.auth
 
 import java.security.PublicKey
+import java.util.AbstractMap
 import java.util.UUID
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.ConcurrentHashMap
 
 data class PendingSession(
@@ -25,11 +27,13 @@ data class PendingSession(
 data class PendingApproval(
     val clientPublicKey: PublicKey,
     val clientPublicKeyBase64: String,
+    val requestId: String = UUID.randomUUID().toString(),
 )
 
 object SessionManager {
     private val pendingSessions = ConcurrentHashMap<UUID, PendingSession>()
     private val pendingApprovals = ConcurrentHashMap<UUID, PendingApproval>()
+    private val pendingApprovalOrder = ConcurrentLinkedQueue<UUID>()
     private val activeSessions = ConcurrentHashMap<UUID, PublicKey>()
 
     fun addPending(
@@ -48,13 +52,23 @@ object SessionManager {
         approval: PendingApproval,
     ) {
         pendingApprovals[uuid] = approval
+        pendingApprovalOrder.add(uuid)
     }
 
     fun getPendingApproval(uuid: UUID): PendingApproval? = pendingApprovals[uuid]
 
     fun removePendingApproval(uuid: UUID) = pendingApprovals.remove(uuid)
 
-    fun getNextPendingApproval(): Map.Entry<UUID, PendingApproval>? = pendingApprovals.entries.firstOrNull()
+    fun getNextPendingApproval(): Map.Entry<UUID, PendingApproval>? {
+        while (true) {
+            val uuid = pendingApprovalOrder.peek() ?: return null
+            val approval = pendingApprovals[uuid]
+            if (approval != null) {
+                return AbstractMap.SimpleEntry(uuid, approval)
+            }
+            pendingApprovalOrder.poll()
+        }
+    }
 
     fun activate(
         uuid: UUID,
@@ -74,6 +88,7 @@ object SessionManager {
     fun clearAll() {
         pendingSessions.clear()
         pendingApprovals.clear()
+        pendingApprovalOrder.clear()
         activeSessions.clear()
     }
 }
