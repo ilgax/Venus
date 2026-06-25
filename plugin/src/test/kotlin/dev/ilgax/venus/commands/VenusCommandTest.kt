@@ -1,6 +1,7 @@
 package dev.ilgax.venus.commands
 
 import dev.ilgax.venus.VenusPlugin
+import dev.ilgax.venus.auth.AuthorizedKeys
 import dev.ilgax.venus.backend.BackendApprovalResult
 import dev.ilgax.venus.backend.BackendApprovalService
 import dev.ilgax.venus.config.VenusConfig
@@ -40,6 +41,7 @@ class VenusCommandTest {
         command = VenusCommand(plugin, approvals)
 
         mockkObject(VenusConfig)
+        mockkObject(AuthorizedKeys)
     }
 
     @AfterTest
@@ -172,5 +174,93 @@ class VenusCommandTest {
         command.execute(stack, arrayOf("allow"))
 
         verify { consoleSender.sendMessage("TestPlayer authorized.") }
+    }
+
+    @Test
+    fun `list from console with no keys shows empty message`() {
+        every { stack.sender } returns consoleSender
+        every { AuthorizedKeys.list() } returns emptyList()
+
+        command.execute(stack, arrayOf("list"))
+
+        verify { consoleSender.sendMessage("No authorized Venus keys.") }
+    }
+
+    @Test
+    fun `list from console with keys shows fingerprints`() {
+        every { stack.sender } returns consoleSender
+        every { AuthorizedKeys.list() } returns
+            listOf(
+                AuthorizedKeys.Entry("key1_b64", "Alice", "SHA256:aaa=="),
+                AuthorizedKeys.Entry("key2_b64", "Bob", "SHA256:bbb=="),
+            )
+
+        command.execute(stack, arrayOf("list"))
+
+        verify { consoleSender.sendMessage("Authorized Venus keys (2):") }
+        verify { consoleSender.sendMessage("  SHA256:aaa==  (claimed: Alice)") }
+        verify { consoleSender.sendMessage("  SHA256:bbb==  (claimed: Bob)") }
+    }
+
+    @Test
+    fun `list from non-console shows error`() {
+        every { stack.sender } returns playerSender
+
+        command.execute(stack, arrayOf("list"))
+
+        verify { playerSender.sendMessage("This command can only be run from the console.") }
+    }
+
+    @Test
+    fun `revoke by fingerprint removes key`() {
+        every { stack.sender } returns consoleSender
+        every { AuthorizedKeys.removeByFingerprint("SHA256:abc==") } returns true
+
+        command.execute(stack, arrayOf("revoke", "SHA256:abc=="))
+
+        verify { consoleSender.sendMessage("Revoked Venus key SHA256:abc==.") }
+    }
+
+    @Test
+    fun `revoke by player name is rejected`() {
+        every { stack.sender } returns consoleSender
+
+        command.execute(stack, arrayOf("revoke", "Alice"))
+
+        verify {
+            consoleSender.sendMessage(
+                match<String> {
+                    it.contains("Revocation by name is not supported") && it.contains("spoofable")
+                },
+            )
+        }
+    }
+
+    @Test
+    fun `revoke with unknown fingerprint shows not found`() {
+        every { stack.sender } returns consoleSender
+        every { AuthorizedKeys.removeByFingerprint("SHA256:nonexistent==") } returns false
+
+        command.execute(stack, arrayOf("revoke", "SHA256:nonexistent=="))
+
+        verify { consoleSender.sendMessage("No authorized Venus key found for SHA256:nonexistent==.") }
+    }
+
+    @Test
+    fun `revoke with no args shows usage`() {
+        every { stack.sender } returns consoleSender
+
+        command.execute(stack, arrayOf("revoke"))
+
+        verify { consoleSender.sendMessage("Usage: venus revoke <fingerprint>") }
+    }
+
+    @Test
+    fun `revoke from non-console shows error`() {
+        every { stack.sender } returns playerSender
+
+        command.execute(stack, arrayOf("revoke", "Alice"))
+
+        verify { playerSender.sendMessage("This command can only be run from the console.") }
     }
 }

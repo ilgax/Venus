@@ -1,6 +1,7 @@
 package dev.ilgax.venus.commands
 
 import dev.ilgax.venus.VenusPlugin
+import dev.ilgax.venus.auth.AuthorizedKeys
 import dev.ilgax.venus.backend.BackendApprovalService
 import dev.ilgax.venus.config.VenusConfig
 import io.papermc.paper.command.brigadier.BasicCommand
@@ -18,7 +19,7 @@ class VenusCommand(
         val sender = stack.sender
 
         if (args.isEmpty()) {
-            sender.sendMessage("Usage: venus allow | venus deny | venus reload")
+            sender.sendMessage("Usage: venus allow | venus deny | venus reload | venus list | venus revoke <fingerprint>")
             return
         }
 
@@ -44,8 +45,28 @@ class VenusCommand(
                 plugin.logger.info("Venus config reloaded by ${sender.name}.")
             }
 
+            "list" -> {
+                if (sender !is ConsoleCommandSender) {
+                    sender.sendMessage("This command can only be run from the console.")
+                    return
+                }
+                handleList(sender)
+            }
+
+            "revoke" -> {
+                if (sender !is ConsoleCommandSender) {
+                    sender.sendMessage("This command can only be run from the console.")
+                    return
+                }
+                if (args.size < 2) {
+                    sender.sendMessage("Usage: venus revoke <fingerprint>")
+                    return
+                }
+                handleRevoke(sender, args[1])
+            }
+
             else -> {
-                sender.sendMessage("Unknown subcommand. Use allow, deny, or reload.")
+                sender.sendMessage("Unknown subcommand. Use allow, deny, reload, list, or revoke.")
             }
         }
     }
@@ -56,5 +77,37 @@ class VenusCommand(
 
     private fun handleDeny(sender: org.bukkit.command.CommandSender) {
         sender.sendMessage(approvals.denyNextPending().message)
+    }
+
+    private fun handleList(sender: org.bukkit.command.CommandSender) {
+        val entries = AuthorizedKeys.list()
+        if (entries.isEmpty()) {
+            sender.sendMessage("No authorized Venus keys.")
+        } else {
+            sender.sendMessage("Authorized Venus keys (${entries.size}):")
+            entries.forEach { entry ->
+                val claimed = if (entry.comment.isEmpty()) "(no claimed name)" else "(claimed: ${entry.comment})"
+                sender.sendMessage("  ${entry.fingerprint}  $claimed")
+            }
+        }
+    }
+
+    private fun handleRevoke(
+        sender: org.bukkit.command.CommandSender,
+        target: String,
+    ) {
+        if (!target.startsWith("SHA256:")) {
+            sender.sendMessage(
+                "Revocation by name is not supported (names are spoofable in offline mode). Run 'venus list' to see key fingerprints.",
+            )
+            return
+        }
+        val removed = AuthorizedKeys.removeByFingerprint(target)
+        if (removed) {
+            sender.sendMessage("Revoked Venus key $target.")
+            plugin.logger.info("Venus key revoked by ${sender.name}: $target")
+        } else {
+            sender.sendMessage("No authorized Venus key found for $target.")
+        }
     }
 }

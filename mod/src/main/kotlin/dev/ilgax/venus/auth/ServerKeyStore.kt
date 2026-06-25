@@ -1,6 +1,9 @@
 package dev.ilgax.venus.auth
 
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.nio.file.attribute.PosixFilePermission
 import java.util.Locale
 
 object ServerKeyStore {
@@ -16,6 +19,7 @@ object ServerKeyStore {
     fun init(venusFolder: File) {
         serversDir = File(venusFolder, "servers")
         serversDir.mkdirs()
+        restrictDirPermissions()
     }
 
     private fun keyFile(
@@ -47,8 +51,16 @@ object ServerKeyStore {
         port: Int,
         publicKeyBase64: String,
     ) {
-        serversDir.mkdirs()
-        keyFile(host, port).writeText(publicKeyBase64)
+        Handshake.decodePublicKey(publicKeyBase64.trim())
+        if (!serversDir.exists() && !serversDir.mkdirs()) {
+            throw IllegalStateException("Failed to create Venus servers directory: ${serversDir.absolutePath}")
+        }
+        restrictDirPermissions()
+        val target = keyFile(host, port).toPath()
+        val tmp = target.resolveSibling(target.fileName.toString() + ".tmp")
+        Files.write(tmp, publicKeyBase64.trim().toByteArray(Charsets.UTF_8))
+        restrictFilePermissions(tmp)
+        Files.move(tmp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
     }
 
     fun storeKey(
@@ -56,5 +68,31 @@ object ServerKeyStore {
         publicKeyBase64: String,
     ) {
         storeKey(identity.host, identity.port, publicKeyBase64)
+    }
+
+    private fun restrictFilePermissions(path: java.nio.file.Path) {
+        try {
+            Files.setPosixFilePermissions(
+                path,
+                setOf(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE),
+            )
+        } catch (_: UnsupportedOperationException) {
+            // Non-POSIX FS (e.g. Windows); no action.
+        }
+    }
+
+    private fun restrictDirPermissions() {
+        try {
+            Files.setPosixFilePermissions(
+                serversDir.toPath(),
+                setOf(
+                    PosixFilePermission.OWNER_READ,
+                    PosixFilePermission.OWNER_WRITE,
+                    PosixFilePermission.OWNER_EXECUTE,
+                ),
+            )
+        } catch (_: UnsupportedOperationException) {
+            // Non-POSIX FS (e.g. Windows); no action.
+        }
     }
 }

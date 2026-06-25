@@ -1,5 +1,9 @@
 package dev.ilgax.venus.auth
 
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.StandardCopyOption
+import java.nio.file.attribute.PosixFilePermission
 import java.security.KeyFactory
 import java.security.KeyPairGenerator
 import java.security.PrivateKey
@@ -17,33 +21,121 @@ class KeyManager(
     private val privateKeyFile = keysFolder.resolve(privateKeyName)
     private val publicKeyFile = keysFolder.resolve(publicKeyName)
 
-    lateinit var privateKey: PrivateKey
-    lateinit var publicKey: PublicKey
-    lateinit var publicKeyBase64: String
+    @Volatile private var _privateKey: PrivateKey? = null
 
+    @Volatile private var _publicKey: PublicKey? = null
+
+    @Volatile private var _publicKeyBase64: String? = null
+
+    val privateKey: PrivateKey
+        get() = _privateKey ?: error("KeyManager not initialized; call loadOrGenerate() first")
+
+    val publicKey: PublicKey
+        get() = _publicKey ?: error("KeyManager not initialized; call loadOrGenerate() first")
+
+    val publicKeyBase64: String
+        get() = _publicKeyBase64 ?: error("KeyManager not initialized; call loadOrGenerate() first")
+
+    @Synchronized
     fun loadOrGenerate() {
-        if (privateKeyFile.exists() && publicKeyFile.exists()) {
-            load()
-        } else {
-            generate()
+        val privateExists = privateKeyFile.exists()
+        val publicExists = publicKeyFile.exists()
+        when {
+            privateExists && publicExists -> load()
+            !privateExists && !publicExists -> generate()
+            else ->
+                throw IllegalStateException(
+                    "Venus key files in inconsistent state: private exists=$privateExists, public exists=$publicExists. " +
+                        "Refusing to silently regenerate server identity. Delete both files to regenerate, or restore the missing file.",
+                )
         }
     }
 
     private fun load() {
         val keyFactory = KeyFactory.getInstance("Ed25519")
-        privateKey = keyFactory.generatePrivate(PKCS8EncodedKeySpec(privateKeyFile.readBytes()))
-        publicKey = keyFactory.generatePublic(X509EncodedKeySpec(publicKeyFile.readBytes()))
-        publicKeyBase64 = Base64.getEncoder().encodeToString(publicKey.encoded)
+        val privKey = keyFactory.generatePrivate(PKCS8EncodedKeySpec(privateKeyFile.readBytes()))
+        val pubKey = keyFactory.generatePublic(X509EncodedKeySpec(publicKeyFile.readBytes()))
+        if (!keysMatch(privKey, pubKey)) {
+            throw IllegalStateException(
+                "Venus key pair mismatch: public key does not correspond to private key. Refusing to load inconsistent key files.",
+            )
+        }
+        _privateKey = privKey
+        _publicKey = pubKey
+        _publicKeyBase64 = Base64.getEncoder().encodeToString(pubKey.encoded)
+        restrictPermissions(privateKeyFile.toPath(), privateOnly = true)
+        restrictPermissions(publicKeyFile.toPath(), privateOnly = false)
+        restrictDirPermissions()
     }
 
     private fun generate() {
+        if (!keysFolder.exists() && !keysFolder.mkdirs()) {
+            throw IllegalStateException("Failed to create Venus keys directory: ${keysFolder.absolutePath}")
+        }
+        restrictDirPermissions()
         val keyPairGenerator = KeyPairGenerator.getInstance("Ed25519")
         val keyPair = keyPairGenerator.generateKeyPair()
-        privateKey = keyPair.private
-        publicKey = keyPair.public
-        publicKeyBase64 = Base64.getEncoder().encodeToString(publicKey.encoded)
-        keysFolder.mkdirs()
-        privateKeyFile.writeBytes(privateKey.encoded)
-        publicKeyFile.writeBytes(publicKey.encoded)
+        _privateKey = keyPair.private
+        _publicKey = keyPair.public
+        _publicKeyBase64 = Base64.getEncoder().encodeToString(keyPair.public.encoded)
+        atomicWrite(privateKeyFile.toPath(), keyPair.private.encoded, privateOnly = true)
+        atomicWrite(publicKeyFile.toPath(), keyPair.public.encoded, privateOnly = false)
+    }
+
+    private fun keysMatch(
+        privateKey: PrivateKey,
+        publicKey: PublicKey,
+    ): Boolean {
+        val data = Handshake.generateChallenge()
+        val sig = Handshake.sign(data, privateKey)
+        return Handshake.verify(data, sig, publicKey)
+    }
+
+    private fun atomicWrite(
+        target: Path,
+        bytes: ByteArray,
+        privateOnly: Boolean,
+    ) {
+        val tmp = target.resolveSibling(target.fileName.toString() + ".tmp")
+        Files.write(tmp, bytes)
+        restrictPermissions(tmp, privateOnly)
+        Files.move(tmp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+    }
+
+    private fun restrictPermissions(
+        path: Path,
+        privateOnly: Boolean,
+    ) {
+        try {
+            val perms =
+                if (privateOnly) {
+                    setOf(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE)
+                } else {
+                    setOf(
+                        PosixFilePermission.OWNER_READ,
+                        PosixFilePermission.OWNER_WRITE,
+                        PosixFilePermission.GROUP_READ,
+                        PosixFilePermission.OTHERS_READ,
+                    )
+                }
+            Files.setPosixFilePermissions(path, perms)
+        } catch (_: UnsupportedOperationException) {
+            // Non-POSIX FS (e.g. Windows); no action.
+        }
+    }
+
+    private fun restrictDirPermissions() {
+        try {
+            Files.setPosixFilePermissions(
+                keysFolder.toPath(),
+                setOf(
+                    PosixFilePermission.OWNER_READ,
+                    PosixFilePermission.OWNER_WRITE,
+                    PosixFilePermission.OWNER_EXECUTE,
+                ),
+            )
+        } catch (_: UnsupportedOperationException) {
+            // Non-POSIX FS (e.g. Windows); no action.
+        }
     }
 }

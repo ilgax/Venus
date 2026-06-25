@@ -1,6 +1,7 @@
 package dev.ilgax.venus.backend
 
 import dev.ilgax.venus.auth.AuthorizedKeys
+import dev.ilgax.venus.auth.Handshake
 import dev.ilgax.venus.auth.PendingApproval
 import dev.ilgax.venus.auth.SessionManager
 import io.mockk.Runs
@@ -71,10 +72,11 @@ class BackendApprovalServiceTest {
         val player = BackendPlayer(onlineUuid, "TestPlayer")
         every {
             SessionManager.getNextPendingApproval()
-        } returnsMany listOf(
-            AbstractMap.SimpleEntry(offlineUuid, offlineApproval),
-            AbstractMap.SimpleEntry(onlineUuid, onlineApproval),
-        )
+        } returnsMany
+            listOf(
+                AbstractMap.SimpleEntry(offlineUuid, offlineApproval),
+                AbstractMap.SimpleEntry(onlineUuid, onlineApproval),
+            )
         every { platform.player(offlineUuid) } returns null
         every { platform.player(onlineUuid) } returns player
         every { SessionManager.removePendingApproval(offlineUuid) } returns offlineApproval
@@ -85,7 +87,8 @@ class BackendApprovalServiceTest {
 
         val result = approvals.allowNextPending()
 
-        assertEquals(BackendApprovalResult(true, "TestPlayer authorized."), result)
+        val expected = "TestPlayer (key ${Handshake.fingerprint(onlineApproval.clientPublicKey)}) authorized."
+        assertEquals(BackendApprovalResult(true, expected), result)
         verify { SessionManager.removePendingApproval(offlineUuid) }
         verify { SessionManager.removePendingApproval(onlineUuid) }
         verify { AuthorizedKeys.authorize(onlineApproval.clientPublicKeyBase64, "TestPlayer") }
@@ -105,7 +108,8 @@ class BackendApprovalServiceTest {
 
         val result = approvals.allowNextPending()
 
-        assertEquals(BackendApprovalResult(true, "TestPlayer authorized."), result)
+        val expected = "TestPlayer (key ${Handshake.fingerprint(approval.clientPublicKey)}) authorized."
+        assertEquals(BackendApprovalResult(true, expected), result)
         verify { AuthorizedKeys.authorize(approval.clientPublicKeyBase64, "TestPlayer") }
         verify { authHandler.startApprovedChallenge(player, approval.clientPublicKey) }
     }
@@ -131,7 +135,8 @@ class BackendApprovalServiceTest {
 
         val result = approvals.denyNextPending()
 
-        assertEquals(BackendApprovalResult(true, "DeniedPlayer denied."), result)
+        val expected = "DeniedPlayer (key ${Handshake.fingerprint(approval.clientPublicKey)}) denied."
+        assertEquals(BackendApprovalResult(true, expected), result)
         verify { authHandler.notifyDenied(player) }
     }
 
@@ -144,10 +149,11 @@ class BackendApprovalServiceTest {
         val player = BackendPlayer(onlineUuid, "DeniedPlayer")
         every {
             SessionManager.getNextPendingApproval()
-        } returnsMany listOf(
-            AbstractMap.SimpleEntry(offlineUuid, offlineApproval),
-            AbstractMap.SimpleEntry(onlineUuid, onlineApproval),
-        )
+        } returnsMany
+            listOf(
+                AbstractMap.SimpleEntry(offlineUuid, offlineApproval),
+                AbstractMap.SimpleEntry(onlineUuid, onlineApproval),
+            )
         every { platform.player(offlineUuid) } returns null
         every { platform.player(onlineUuid) } returns player
         every { SessionManager.removePendingApproval(offlineUuid) } returns offlineApproval
@@ -156,7 +162,8 @@ class BackendApprovalServiceTest {
 
         val result = approvals.denyNextPending()
 
-        assertEquals(BackendApprovalResult(true, "DeniedPlayer denied."), result)
+        val expected = "DeniedPlayer (key ${Handshake.fingerprint(onlineApproval.clientPublicKey)}) denied."
+        assertEquals(BackendApprovalResult(true, expected), result)
         verify { SessionManager.removePendingApproval(offlineUuid) }
         verify { SessionManager.removePendingApproval(onlineUuid) }
         verify { authHandler.notifyDenied(player) }

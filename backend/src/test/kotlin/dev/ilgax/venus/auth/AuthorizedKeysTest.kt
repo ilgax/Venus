@@ -1,5 +1,7 @@
 package dev.ilgax.venus.auth
 
+import java.security.KeyPairGenerator
+import java.util.Base64
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -69,5 +71,82 @@ class AuthorizedKeysTest {
         val key = "trimmed_key"
         AuthorizedKeys.authorize("  $key  ", "user")
         assertTrue(AuthorizedKeys.isAuthorized(key))
+    }
+
+    @Test
+    fun `authorize deduplicates same key`() {
+        AuthorizedKeys.authorize("dup_key", "user1")
+        assertEquals(1, AuthorizedKeys.count())
+        AuthorizedKeys.authorize("dup_key", "user2")
+        assertEquals(1, AuthorizedKeys.count())
+        assertTrue(AuthorizedKeys.isAuthorized("dup_key"))
+    }
+
+    @Test
+    fun `remove by base64 returns true and removes key`() {
+        AuthorizedKeys.authorize("removable_key", "user")
+        assertTrue(AuthorizedKeys.remove("removable_key"))
+        assertFalse(AuthorizedKeys.isAuthorized("removable_key"))
+    }
+
+    @Test
+    fun `remove by base64 returns false for unknown key`() {
+        assertFalse(AuthorizedKeys.remove("nonexistent_key"))
+    }
+
+    @Test
+    fun `removeByFingerprint removes correct entry`() {
+        val keyB64 = genKeyB64()
+        AuthorizedKeys.authorize(keyB64, "FingerprintUser")
+        val fp = Handshake.fingerprint(Handshake.decodePublicKey(keyB64))
+        assertTrue(AuthorizedKeys.removeByFingerprint(fp))
+        assertFalse(AuthorizedKeys.isAuthorized(keyB64))
+    }
+
+    @Test
+    fun `removeByFingerprint returns false for unknown fingerprint`() {
+        AuthorizedKeys.authorize(genKeyB64(), "Someone")
+        assertFalse(AuthorizedKeys.removeByFingerprint("SHA256:nonexistent=="))
+    }
+
+    @Test
+    fun `list returns entries with fingerprints`() {
+        val key1 = genKeyB64()
+        val key2 = genKeyB64()
+        AuthorizedKeys.authorize(key1, "Alice")
+        AuthorizedKeys.authorize(key2, "Bob")
+
+        val entries = AuthorizedKeys.list()
+        assertEquals(2, entries.size)
+
+        val fps = entries.map { it.fingerprint }.toSet()
+        assertEquals(2, fps.size)
+        assertTrue(fps.all { it.startsWith("SHA256:") })
+
+        val entry1 = entries.first { it.comment == "Alice" }
+        assertEquals(key1, entry1.publicKeyBase64)
+        assertEquals(
+            Handshake.fingerprint(Handshake.decodePublicKey(key1)),
+            entry1.fingerprint,
+        )
+    }
+
+    @Test
+    fun `list returns empty list when no keys`() {
+        assertTrue(AuthorizedKeys.list().isEmpty())
+    }
+
+    @Test
+    fun `list fingerprint is deterministic across calls`() {
+        val keyB64 = genKeyB64()
+        AuthorizedKeys.authorize(keyB64, "Stable")
+        val fp1 = AuthorizedKeys.list().first().fingerprint
+        val fp2 = AuthorizedKeys.list().first().fingerprint
+        assertEquals(fp1, fp2)
+    }
+
+    private fun genKeyB64(): String {
+        val kp = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
+        return Base64.getEncoder().encodeToString(kp.public.encoded)
     }
 }

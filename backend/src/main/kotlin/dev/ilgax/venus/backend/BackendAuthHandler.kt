@@ -80,7 +80,10 @@ class BackendAuthHandler(
 
             val approval = PendingApproval(clientPublicKey, clientPublicKeyBase64)
             SessionManager.addPendingApproval(player.uuid, approval)
-            platform.logger.info("${player.name} wants to connect to Venus. Type 'venus allow' or 'venus deny'")
+            val fingerprint = Handshake.fingerprint(clientPublicKey)
+            platform.logger.info(
+                "Venus connect request from key $fingerprint (claimed name: ${player.name}). Type 'venus allow' or 'venus deny'",
+            )
             scheduleApprovalTimeout(player, approval)
         }
     }
@@ -134,7 +137,15 @@ class BackendAuthHandler(
             return
         }
 
-        if (!Handshake.verify(challenge, clientSig, pending.clientPublicKey)) {
+        if (!Handshake.verifyTranscript(
+                keyManager.publicKey,
+                pending.clientPublicKey,
+                challenge,
+                Handshake.ROLE_CLIENT,
+                clientSig,
+                pending.clientPublicKey,
+            )
+        ) {
             platform.logger.warning("Invalid signature from ${player.name} - rejecting")
             sendAuthError(player, "auth_invalid_response")
             SessionManager.removePending(player.uuid)
@@ -144,7 +155,7 @@ class BackendAuthHandler(
         SessionManager.removePending(player.uuid)
         sessionTimeoutTasks.remove(player.uuid)?.cancel()
         SessionManager.activate(player.uuid, pending.clientPublicKey)
-        platform.logger.info("Venus session active for ${player.name}")
+        platform.logger.info("Venus session active for ${player.name} (key ${Handshake.fingerprint(pending.clientPublicKey)})")
 
         val ready =
             json.encodeToString(
@@ -225,7 +236,14 @@ class BackendAuthHandler(
         approvalTimeoutTasks.remove(player.uuid)?.cancel()
         SessionManager.removePendingApproval(player.uuid)
         val challenge = Handshake.generateChallenge()
-        val serverSig = Handshake.sign(challenge, keyManager.privateKey)
+        val serverSig =
+            Handshake.signTranscript(
+                keyManager.publicKey,
+                clientPublicKey,
+                challenge,
+                Handshake.ROLE_SERVER,
+                keyManager.privateKey,
+            )
         SessionManager.addPending(player.uuid, PendingSession(clientPublicKey, challenge))
         if (expireChallenge) {
             scheduleAuthChallengeTimeout(player)

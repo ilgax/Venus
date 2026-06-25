@@ -165,7 +165,12 @@ class ChannelClient(
         val storedKey = ServerKeyStore.getStoredKey(identity)
         if (storedKey == null) {
             log("Venus: first connection to $identity")
-            ServerKeyStore.storeKey(identity, serverKeyBase64)
+            try {
+                ServerKeyStore.storeKey(identity, serverKeyBase64)
+            } catch (e: Exception) {
+                failAuth("Invalid server key.", "Venus: invalid server key from $identity - ${e.message}")
+                return
+            }
         } else if (storedKey != serverKeyBase64) {
             failAuth("Server key mismatch.", "Venus: WARNING server key mismatch for $identity")
             sendError("mitm_key_mismatch")
@@ -227,13 +232,28 @@ class ChannelClient(
                 failAuth("Stored server key is invalid.", "Venus: invalid stored server key - ${e.message}")
                 return
             }
-        if (!Handshake.verify(challenge, serverSig, serverPublicKey)) {
+        if (!Handshake.verifyTranscript(
+                serverPublicKey,
+                keyManager.publicKey,
+                challenge,
+                Handshake.ROLE_SERVER,
+                serverSig,
+                serverPublicKey,
+            )
+        ) {
             failAuth("Server signature verification failed.", "Venus: WARNING - server signature verification failed")
             sendError("mitm_sig_fail")
             return
         }
 
-        val clientSig = Handshake.sign(challenge, keyManager.privateKey)
+        val clientSig =
+            Handshake.signTranscript(
+                serverPublicKey,
+                keyManager.publicKey,
+                challenge,
+                Handshake.ROLE_CLIENT,
+                keyManager.privateKey,
+            )
         val response =
             json.encodeToString(
                 AuthResponsePacket.serializer(),

@@ -3,8 +3,8 @@ package dev.ilgax.venus.auth
 import java.security.PublicKey
 import java.util.AbstractMap
 import java.util.UUID
-import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedQueue
 
 data class PendingSession(
     val clientPublicKey: PublicKey,

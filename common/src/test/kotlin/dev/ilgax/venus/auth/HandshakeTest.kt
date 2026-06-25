@@ -99,4 +99,97 @@ class HandshakeTest {
         val sig2 = Handshake.sign(data, keyPair.private)
         assertTrue(sig1.contentEquals(sig2))
     }
+
+    @Test
+    fun `signTranscript and verifyTranscript roundtrip succeeds`() {
+        val serverKp = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
+        val clientKp = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
+        val challenge = Handshake.generateChallenge()
+
+        val serverSig =
+            Handshake.signTranscript(serverKp.public, clientKp.public, challenge, Handshake.ROLE_SERVER, serverKp.private)
+        val clientSig =
+            Handshake.signTranscript(serverKp.public, clientKp.public, challenge, Handshake.ROLE_CLIENT, clientKp.private)
+
+        assertTrue(
+            Handshake.verifyTranscript(serverKp.public, clientKp.public, challenge, Handshake.ROLE_SERVER, serverSig, serverKp.public),
+        )
+        assertTrue(
+            Handshake.verifyTranscript(serverKp.public, clientKp.public, challenge, Handshake.ROLE_CLIENT, clientSig, clientKp.public),
+        )
+    }
+
+    @Test
+    fun `server-role signature does not verify as client-role (reflection prevention)`() {
+        val serverKp = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
+        val clientKp = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
+        val challenge = Handshake.generateChallenge()
+
+        val serverSig =
+            Handshake.signTranscript(serverKp.public, clientKp.public, challenge, Handshake.ROLE_SERVER, serverKp.private)
+
+        assertFalse(
+            Handshake.verifyTranscript(serverKp.public, clientKp.public, challenge, Handshake.ROLE_CLIENT, serverSig, serverKp.public),
+        )
+    }
+
+    @Test
+    fun `verifyTranscript fails with different server key`() {
+        val serverKp = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
+        val otherServerKp = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
+        val clientKp = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
+        val challenge = Handshake.generateChallenge()
+
+        val serverSig =
+            Handshake.signTranscript(serverKp.public, clientKp.public, challenge, Handshake.ROLE_SERVER, serverKp.private)
+
+        assertFalse(
+            Handshake.verifyTranscript(otherServerKp.public, clientKp.public, challenge, Handshake.ROLE_SERVER, serverSig, serverKp.public),
+        )
+    }
+
+    @Test
+    fun `verifyTranscript fails with different client key`() {
+        val serverKp = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
+        val clientKp = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
+        val otherClientKp = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
+        val challenge = Handshake.generateChallenge()
+
+        val clientSig =
+            Handshake.signTranscript(serverKp.public, clientKp.public, challenge, Handshake.ROLE_CLIENT, clientKp.private)
+
+        assertFalse(
+            Handshake.verifyTranscript(serverKp.public, otherClientKp.public, challenge, Handshake.ROLE_CLIENT, clientSig, clientKp.public),
+        )
+    }
+
+    @Test
+    fun `verifyTranscript fails with different challenge`() {
+        val serverKp = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
+        val clientKp = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
+        val challenge = Handshake.generateChallenge()
+        val otherChallenge = Handshake.generateChallenge()
+
+        val serverSig =
+            Handshake.signTranscript(serverKp.public, clientKp.public, challenge, Handshake.ROLE_SERVER, serverKp.private)
+
+        assertFalse(
+            Handshake.verifyTranscript(serverKp.public, clientKp.public, otherChallenge, Handshake.ROLE_SERVER, serverSig, serverKp.public),
+        )
+    }
+
+    @Test
+    fun `fingerprint is deterministic and prefixed`() {
+        val fp = Handshake.fingerprint(keyPair.public)
+        assertTrue(fp.startsWith("SHA256:"))
+        assertEquals(fp, Handshake.fingerprint(keyPair.public))
+    }
+
+    @Test
+    fun `fingerprint differs across keys`() {
+        val otherKp = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
+        val fp1 = Handshake.fingerprint(keyPair.public)
+        val fp2 = Handshake.fingerprint(otherKp.public)
+        assertFalse(fp1 == fp2)
+    }
 }
