@@ -58,7 +58,11 @@ class BackendRuntime private constructor(
                 channelHandler = BackendChannelHandler(authHandler, packetRouter, sessionManager, platform.logger),
                 logHandler = logHandler,
                 statSubscriptions = statSubscriptions,
-                approvals = BackendApprovalService(platform, authHandler, sessionManager),
+                approvals =
+                    BackendApprovalService(platform, authHandler, sessionManager) { uuid ->
+                        statSubscriptions.cancel(uuid)
+                        logHandler.unsubscribe(uuid)
+                    },
                 sessionManager = sessionManager,
             )
         }

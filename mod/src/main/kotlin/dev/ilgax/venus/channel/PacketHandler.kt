@@ -48,7 +48,7 @@ class PacketHandler(
                 StatSubscribePacket.serializer(),
                 StatSubscribePacket(
                     type = "stat_subscribe",
-                    intervalSeconds = 2,
+                    intervalSeconds = 1,
                     stats = listOf("tps", "ram", "mspt", "uptime", "players", "server", "cpu"),
                 ),
             )
@@ -56,6 +56,10 @@ class PacketHandler(
     }
 
     fun handleData(data: String) {
+        if (SessionState.handshakeState != HandshakeState.ACTIVE) {
+            log("Venus: ignored data packet before active session")
+            return
+        }
         val type =
             try {
                 json
@@ -91,6 +95,7 @@ class PacketHandler(
             return
         }
         val sanitizedReason = LogSanitizer.sanitize(packet.reason)
+        SessionState.markIdle()
         showAuthFailure(authFailureMessage(sanitizedReason))
         log("Venus: auth failed - $sanitizedReason")
     }

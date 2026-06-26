@@ -19,13 +19,13 @@ class BackendStatSubscriptionManagerTest {
     }
 
     @Test
-    fun `subscribe enforces minimum two second interval`() {
+    fun `subscribe enforces minimum one second interval`() {
         val platform = platformFixture()
         val uuid = UUID.randomUUID()
 
         createManager(platform).subscribe(uuid, listOf("tps"), 1)
 
-        verify { platform.scheduler.runRepeating(40L, 40L, any()) }
+        verify { platform.scheduler.runRepeating(20L, 20L, any()) }
     }
 
     @Test

@@ -231,9 +231,16 @@ class PacketsTest {
     }
 
     @Test
+    fun `StatSubscribePacket accepts documented one second interval`() {
+        val packet = StatSubscribePacket(type = "stat_subscribe", intervalSeconds = 1, stats = listOf("tps"))
+
+        assertEquals(1, packet.intervalSeconds)
+    }
+
+    @Test
     fun `StatSubscribePacket rejects interval below minimum`() {
         assertFailsWith<IllegalArgumentException> {
-            StatSubscribePacket(type = "stat_subscribe", intervalSeconds = 1, stats = listOf("tps"))
+            StatSubscribePacket(type = "stat_subscribe", intervalSeconds = 0, stats = listOf("tps"))
         }
     }
 
@@ -277,6 +284,13 @@ class PacketsTest {
     }
 
     @Test
+    fun `ConsoleLogPacket rejects oversized encoded payload`() {
+        assertFailsWith<IllegalArgumentException> {
+            ConsoleLogPacket(type = "console_log", lines = listOf("x".repeat(MAX_PACKET_SIZE)))
+        }
+    }
+
+    @Test
     fun `CmdResponsePacket rejects oversized command`() {
         assertFailsWith<IllegalArgumentException> {
             CmdResponsePacket(
@@ -294,6 +308,17 @@ class PacketsTest {
                 type = "cmd_response",
                 command = "say hi",
                 lines = List(MAX_LINES_PER_PACKET + 1) { "line" },
+            )
+        }
+    }
+
+    @Test
+    fun `CmdResponsePacket rejects oversized encoded output`() {
+        assertFailsWith<IllegalArgumentException> {
+            CmdResponsePacket(
+                type = "cmd_response",
+                command = "say hi",
+                lines = listOf("x".repeat(MAX_PACKET_SIZE)),
             )
         }
     }

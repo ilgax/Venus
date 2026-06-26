@@ -104,10 +104,11 @@ class VenusCommand(
             )
             return
         }
-        val removed = AuthorizedKeys.removeByFingerprint(target)
-        if (removed) {
+        val removed = AuthorizedKeys.removeEntryByFingerprint(target)
+        if (removed != null) {
+            val deactivatedSessions = approvals.deactivateSessionsForKey(removed.publicKeyBase64)
             sender.sendMessage("Revoked Venus key $target.")
-            plugin.logger.info("Venus key revoked by ${sender.name}: $target")
+            plugin.logger.info("Venus key revoked by ${sender.name}: $target; deactivated $deactivatedSessions active session(s)")
         } else {
             sender.sendMessage("No authorized Venus key found for $target.")
         }

@@ -39,6 +39,7 @@ object AuthorizedKeys {
 
     fun isAuthorized(publicKeyBase64: String): Boolean = keys.containsKey(publicKeyBase64.trim())
 
+    @Synchronized
     fun authorize(
         publicKeyBase64: String,
         comment: String,
@@ -49,6 +50,21 @@ object AuthorizedKeys {
         rewriteFile()
     }
 
+    @Synchronized
+    fun tryAuthorize(
+        publicKeyBase64: String,
+        comment: String,
+        maxUsers: Int,
+    ): Boolean {
+        val normalized = publicKeyBase64.trim()
+        if (keys.containsKey(normalized)) return true
+        if (keys.size >= maxUsers) return false
+        keys[normalized] = comment
+        rewriteFile()
+        return true
+    }
+
+    @Synchronized
     fun remove(publicKeyBase64: String): Boolean {
         val normalized = publicKeyBase64.trim()
         val removed = keys.remove(normalized) != null
@@ -56,11 +72,21 @@ object AuthorizedKeys {
         return removed
     }
 
-    fun removeByFingerprint(fingerprint: String): Boolean {
-        val entry = keys.entries.firstOrNull { computeFingerprint(it.key) == fingerprint } ?: return false
+    @Synchronized
+    fun removeByFingerprint(fingerprint: String): Boolean = removeEntryByFingerprint(fingerprint) != null
+
+    @Synchronized
+    fun removeEntryByFingerprint(fingerprint: String): Entry? {
+        val entry = keys.entries.firstOrNull { computeFingerprint(it.key) == fingerprint } ?: return null
+        val removed =
+            Entry(
+                publicKeyBase64 = entry.key,
+                comment = entry.value,
+                fingerprint = computeFingerprint(entry.key),
+            )
         keys.remove(entry.key)
         rewriteFile()
-        return true
+        return removed
     }
 
     fun list(): List<Entry> =

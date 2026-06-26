@@ -44,11 +44,11 @@ data class ErrorPacket(
 @Serializable
 data class StatSubscribePacket(
     val type: String,
-    @SerialName("interval_seconds") val intervalSeconds: Int = 2,
+    @SerialName("interval_seconds") val intervalSeconds: Int = 1,
     val stats: List<String> = listOf("tps", "ram"),
 ) {
     init {
-        require(intervalSeconds in 2..300) { "interval_seconds must be in 2..300" }
+        require(intervalSeconds in 1..300) { "interval_seconds must be in 1..300" }
         require(stats.size <= MAX_STATS_ENTRIES) { "stats list must have at most $MAX_STATS_ENTRIES entries" }
     }
 }
@@ -85,6 +85,7 @@ data class ConsoleLogPacket(
 ) {
     init {
         require(lines.size <= MAX_LINES_PER_PACKET) { "lines must have at most $MAX_LINES_PER_PACKET entries" }
+        requireEncodedPacketSize("console_log", consoleLogPacketSize(lines))
     }
 }
 
@@ -97,6 +98,7 @@ data class CmdResponsePacket(
     init {
         require(command.length <= MAX_COMMAND_LENGTH) { "command must be at most $MAX_COMMAND_LENGTH chars" }
         require(lines.size <= MAX_LINES_PER_PACKET) { "lines must have at most $MAX_LINES_PER_PACKET entries" }
+        requireEncodedPacketSize("cmd_response", cmdResponsePacketSize(command, lines))
     }
 }
 
@@ -206,3 +208,37 @@ const val MAX_LINES_PER_PACKET: Int = 100
 const val MAX_PLAYERS_PER_LIST: Int = 200
 const val PRE_AUTH_RATE_LIMIT: Int = 5
 const val PRE_AUTH_RATE_WINDOW_MS: Long = 10_000
+
+private fun requireEncodedPacketSize(
+    packetType: String,
+    size: Int,
+) {
+    require(size <= MAX_PACKET_SIZE) { "$packetType packet must be at most $MAX_PACKET_SIZE bytes when encoded" }
+}
+
+private fun consoleLogPacketSize(lines: List<String>): Int =
+    """{"type":"console_log","lines":[]}""".toByteArray(Charsets.UTF_8).size +
+        lines.sumOf(::jsonStringSize) +
+        (lines.size - 1).coerceAtLeast(0)
+
+private fun cmdResponsePacketSize(
+    command: String,
+    lines: List<String>,
+): Int =
+    """{"type":"cmd_response","command":,"lines":[]}""".toByteArray(Charsets.UTF_8).size +
+        jsonStringSize(command) +
+        lines.sumOf(::jsonStringSize) +
+        (lines.size - 1).coerceAtLeast(0)
+
+private fun jsonStringSize(value: String): Int {
+    var size = 2
+    value.forEach { char ->
+        size +=
+            when (char) {
+                '\\', '"', '\n', '\r', '\t', '\b', '\u000C' -> 2
+                in '\u0000'..'\u001F' -> 6
+                else -> char.toString().toByteArray(Charsets.UTF_8).size
+            }
+    }
+    return size
+}

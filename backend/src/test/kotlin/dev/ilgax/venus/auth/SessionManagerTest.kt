@@ -1,6 +1,7 @@
 package dev.ilgax.venus.auth
 
 import java.security.KeyPairGenerator
+import java.util.Base64
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -41,14 +42,14 @@ class SessionManagerTest {
 
     @Test
     fun `addPendingApproval and getPendingApproval roundtrip`() {
-        val approval = PendingApproval(keyPair.public, keyPair.public.encoded.toString())
+        val approval = PendingApproval(keyPair.public, keyPair.public.base64())
         sessionManager.addPendingApproval(uuid, approval)
         assertEquals(approval, sessionManager.getPendingApproval(uuid))
     }
 
     @Test
     fun `removePendingApproval removes and returns`() {
-        val approval = PendingApproval(keyPair.public, keyPair.public.encoded.toString())
+        val approval = PendingApproval(keyPair.public, keyPair.public.base64())
         sessionManager.addPendingApproval(uuid, approval)
         assertEquals(approval, sessionManager.removePendingApproval(uuid))
         assertNull(sessionManager.getPendingApproval(uuid))
@@ -102,6 +103,21 @@ class SessionManagerTest {
     }
 
     @Test
+    fun `deactivateByPublicKey removes matching active sessions`() {
+        val matchingUuid = UUID.randomUUID()
+        val otherUuid = UUID.randomUUID()
+        val otherKeyPair = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
+        sessionManager.activate(matchingUuid, keyPair.public)
+        sessionManager.activate(otherUuid, otherKeyPair.public)
+
+        val removed = sessionManager.deactivateByPublicKey(keyPair.public)
+
+        assertEquals(listOf(matchingUuid), removed)
+        assertFalse(sessionManager.isActive(matchingUuid))
+        assertTrue(sessionManager.isActive(otherUuid))
+    }
+
+    @Test
     fun `deactivate removes all three associations`() {
         sessionManager.addPending(uuid, PendingSession(keyPair.public, ByteArray(32) { 7 }))
         sessionManager.addPendingApproval(uuid, PendingApproval(keyPair.public, "key"))
@@ -135,4 +151,6 @@ class SessionManagerTest {
         val s2 = PendingSession(otherKeyPair.public, ByteArray(32) { 1 })
         assertNotEquals(s1, s2)
     }
+
+    private fun java.security.PublicKey.base64(): String = Base64.getEncoder().encodeToString(encoded)
 }

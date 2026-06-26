@@ -13,6 +13,6 @@ class ChannelListener(
         player: Player,
         message: ByteArray,
     ) {
-        delegate.handle(channel, player.toBackendPlayer(), message.toString(Charsets.UTF_8))
+        delegate.handle(channel, player.toBackendPlayer(), message)
     }
 }

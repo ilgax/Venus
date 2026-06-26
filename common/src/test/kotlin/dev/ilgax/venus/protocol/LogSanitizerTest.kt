@@ -49,6 +49,11 @@ class LogSanitizerTest {
 
     @Test
     fun `redactCommand sanitizes newlines in command name`() {
-        assertEquals("sa\\ny", LogSanitizer.redactCommand("sa\ny hello"))
+        assertEquals("sa", LogSanitizer.redactCommand("sa\ny hello"))
+    }
+
+    @Test
+    fun `redactCommand trims leading whitespace and splits on any whitespace`() {
+        assertEquals("say", LogSanitizer.redactCommand("  say\tsecret"))
     }
 }

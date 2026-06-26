@@ -78,6 +78,16 @@ class SessionManager {
 
     fun isActive(uuid: UUID) = activeSessions.containsKey(uuid)
 
+    fun deactivateByPublicKey(publicKey: PublicKey): List<UUID> {
+        val matching =
+            activeSessions
+                .filterValues { it == publicKey }
+                .keys
+                .toList()
+        matching.forEach { deactivate(it) }
+        return matching
+    }
+
     fun deactivate(uuid: UUID) {
         activeSessions.remove(uuid)
         pendingSessions.remove(uuid)

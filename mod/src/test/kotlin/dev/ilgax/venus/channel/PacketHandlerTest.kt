@@ -41,13 +41,14 @@ class PacketHandlerTest {
         assertEquals(1, successToasts)
         val subscription = json.decodeFromString(StatSubscribePacket.serializer(), sent.single())
         assertEquals("stat_subscribe", subscription.type)
-        assertEquals(2, subscription.intervalSeconds)
+        assertEquals(1, subscription.intervalSeconds)
         assertEquals(listOf("tps", "ram", "mspt", "uptime", "players", "server", "cpu"), subscription.stats)
     }
 
     @Test
     fun `data packets update stats and command response history`() {
         val handler = PacketHandler(json, {}) {}
+        SessionState.markActive()
         val stats =
             StatsPacket(
                 type = "stats",
@@ -74,6 +75,7 @@ class PacketHandlerTest {
     @Test
     fun `player list and detail packets update player state`() {
         val handler = PacketHandler(json, {}) {}
+        SessionState.markActive()
         val playerList =
             PlayerListPacket(
                 type = "player_list",
@@ -165,6 +167,7 @@ class PacketHandlerTest {
         val response = CmdResponsePacket(type = "cmd_response", command = "say hi", lines = listOf("hi"))
         SessionState.updateStats(stats)
         SessionState.addCommandResponse(response)
+        SessionState.markActive()
 
         handler.handleData("""{"type":"unknown","value":1}""")
         handler.handleData("""{"type":""")
@@ -187,6 +190,19 @@ class PacketHandlerTest {
     }
 
     @Test
+    fun `auth error clears expecting ready state`() {
+        val sent = mutableListOf<String>()
+        val handler = PacketHandler(json, sent::add, {}, {}, {})
+        SessionState.markExpectingReady()
+
+        handler.handleError(json.encodeToString(ErrorPacket.serializer(), ErrorPacket("error", "auth_denied")))
+        handler.handleReady(json.encodeToString(ReadyPacket.serializer(), ReadyPacket("ready")))
+
+        assertFalse(SessionState.sessionActive)
+        assertTrue(sent.isEmpty())
+    }
+
+    @Test
     fun `invalid error packet does not show auth failure toast`() {
         val failures = mutableListOf<String>()
         val handler = PacketHandler(json, {}, {}, {}, failures::add)
@@ -204,6 +220,16 @@ class PacketHandlerTest {
         handler.handleData("""{"type":"unknown"}""")
 
         assertFalse(SessionState.sessionActive)
+        assertNull(SessionState.latestStats)
+        assertTrue(SessionState.consoleLines.isEmpty())
+    }
+
+    @Test
+    fun `data packets before active session do not mutate state`() {
+        val handler = PacketHandler(json, {}) {}
+
+        handler.handleData(json.encodeToString(StatsPacket.serializer(), StatsPacket(type = "stats", tps = 20.0)))
+
         assertNull(SessionState.latestStats)
         assertTrue(SessionState.consoleLines.isEmpty())
     }

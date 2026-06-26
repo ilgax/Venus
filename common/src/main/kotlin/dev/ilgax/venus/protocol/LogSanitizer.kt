@@ -9,5 +9,5 @@ object LogSanitizer {
             .replace("\t", "\\t")
             .filter { it.code >= 0x20 || it == ' ' }
 
-    fun redactCommand(command: String): String = sanitize(command.substringBefore(' '))
+    fun redactCommand(command: String): String = sanitize(command.trimStart().takeWhile { !it.isWhitespace() })
 }

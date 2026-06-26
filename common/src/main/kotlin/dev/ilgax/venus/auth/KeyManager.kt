@@ -120,7 +120,7 @@ class KeyManager(
                 }
             Files.setPosixFilePermissions(path, perms)
         } catch (_: UnsupportedOperationException) {
-            // Non-POSIX FS (e.g. Windows); no action.
+            restrictFilePermissionsFallback(path, privateOnly)
         }
     }
 
@@ -135,7 +135,28 @@ class KeyManager(
                 ),
             )
         } catch (_: UnsupportedOperationException) {
-            // Non-POSIX FS (e.g. Windows); no action.
+            restrictDirectoryPermissionsFallback()
         }
+    }
+
+    private fun restrictFilePermissionsFallback(
+        path: Path,
+        privateOnly: Boolean,
+    ) {
+        val file = path.toFile()
+        file.setReadable(false, false)
+        file.setWritable(false, false)
+        file.setExecutable(false, false)
+        file.setReadable(true, !privateOnly)
+        file.setWritable(true, true)
+    }
+
+    private fun restrictDirectoryPermissionsFallback() {
+        keysFolder.setReadable(false, false)
+        keysFolder.setWritable(false, false)
+        keysFolder.setExecutable(false, false)
+        keysFolder.setReadable(true, true)
+        keysFolder.setWritable(true, true)
+        keysFolder.setExecutable(true, true)
     }
 }

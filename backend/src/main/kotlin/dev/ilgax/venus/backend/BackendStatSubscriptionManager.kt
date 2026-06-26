@@ -16,7 +16,7 @@ class BackendStatSubscriptionManager(
         intervalSeconds: Int,
     ) {
         cancel(uuid)
-        val intervalTicks = intervalSeconds.coerceIn(2, 300) * 20L
+        val intervalTicks = intervalSeconds.coerceIn(1, 300) * 20L
         tasks[uuid] =
             platform.scheduler.runRepeating(intervalTicks, intervalTicks) {
                 if (!sessionManager.isActive(uuid)) {

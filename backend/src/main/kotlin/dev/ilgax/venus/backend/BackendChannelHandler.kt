@@ -5,9 +5,9 @@ import dev.ilgax.venus.protocol.MAX_PACKET_SIZE
 import dev.ilgax.venus.protocol.PRE_AUTH_RATE_LIMIT
 import dev.ilgax.venus.protocol.PRE_AUTH_RATE_WINDOW_MS
 import dev.ilgax.venus.protocol.VenusChannels
+import java.util.ArrayDeque
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.CopyOnWriteArrayList
 
 enum class BackendIncomingChannel(
     val channel: String,
@@ -30,16 +30,42 @@ class BackendChannelHandler(
     private val sessionManager: SessionManager,
     private val logger: BackendLogger,
 ) {
-    private val preAuthMessageTimes = ConcurrentHashMap<UUID, MutableList<Long>>()
+    private val preAuthMessageTimes = ConcurrentHashMap<UUID, ArrayDeque<Long>>()
+
+    fun handle(
+        channel: String,
+        player: BackendPlayer,
+        data: ByteArray,
+    ) {
+        if (data.size > MAX_PACKET_SIZE) {
+            logger.warning("Oversized packet (${data.size} bytes) from ${player.name} on $channel - ignoring")
+            return
+        }
+        handleDecoded(channel, player, data.toString(Charsets.UTF_8), data.size)
+    }
 
     fun handle(
         channel: String,
         player: BackendPlayer,
         data: String,
     ) {
+        val byteSize = data.toByteArray(Charsets.UTF_8).size
+        if (byteSize > MAX_PACKET_SIZE) {
+            logger.warning("Oversized packet ($byteSize bytes) from ${player.name} on $channel - ignoring")
+            return
+        }
+        handleDecoded(channel, player, data, byteSize)
+    }
+
+    private fun handleDecoded(
+        channel: String,
+        player: BackendPlayer,
+        data: String,
+        byteSize: Int,
+    ) {
         try {
-            if (data.length > MAX_PACKET_SIZE) {
-                logger.warning("Oversized packet (${data.length} bytes) from ${player.name} on $channel - ignoring")
+            if (byteSize > MAX_PACKET_SIZE) {
+                logger.warning("Oversized packet ($byteSize bytes) from ${player.name} on $channel - ignoring")
                 return
             }
 
@@ -76,9 +102,16 @@ class BackendChannelHandler(
 
     private fun isRateLimited(uuid: UUID): Boolean {
         val now = System.currentTimeMillis()
-        val times = preAuthMessageTimes.computeIfAbsent(uuid) { CopyOnWriteArrayList() }
-        times.add(now)
-        times.removeAll { it < now - PRE_AUTH_RATE_WINDOW_MS }
-        return times.size > PRE_AUTH_RATE_LIMIT
+        val times = preAuthMessageTimes.computeIfAbsent(uuid) { ArrayDeque() }
+        synchronized(times) {
+            while (times.isNotEmpty() && times.peekFirst() < now - PRE_AUTH_RATE_WINDOW_MS) {
+                times.removeFirst()
+            }
+            if (times.size >= PRE_AUTH_RATE_LIMIT) {
+                return true
+            }
+            times.addLast(now)
+            return false
+        }
     }
 }

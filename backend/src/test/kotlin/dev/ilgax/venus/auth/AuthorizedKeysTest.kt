@@ -83,6 +83,26 @@ class AuthorizedKeysTest {
     }
 
     @Test
+    fun `tryAuthorize refuses new key when max users reached`() {
+        AuthorizedKeys.authorize("key1", "user1")
+
+        assertFalse(AuthorizedKeys.tryAuthorize("key2", "user2", maxUsers = 1))
+
+        assertFalse(AuthorizedKeys.isAuthorized("key2"))
+        assertEquals(1, AuthorizedKeys.count())
+    }
+
+    @Test
+    fun `tryAuthorize allows existing key when max users reached`() {
+        AuthorizedKeys.authorize("key1", "user1")
+
+        assertTrue(AuthorizedKeys.tryAuthorize("key1", "user1", maxUsers = 1))
+
+        assertTrue(AuthorizedKeys.isAuthorized("key1"))
+        assertEquals(1, AuthorizedKeys.count())
+    }
+
+    @Test
     fun `remove by base64 returns true and removes key`() {
         AuthorizedKeys.authorize("removable_key", "user")
         assertTrue(AuthorizedKeys.remove("removable_key"))
@@ -100,6 +120,20 @@ class AuthorizedKeysTest {
         AuthorizedKeys.authorize(keyB64, "FingerprintUser")
         val fp = Handshake.fingerprint(Handshake.decodePublicKey(keyB64))
         assertTrue(AuthorizedKeys.removeByFingerprint(fp))
+        assertFalse(AuthorizedKeys.isAuthorized(keyB64))
+    }
+
+    @Test
+    fun `removeEntryByFingerprint returns removed entry`() {
+        val keyB64 = genKeyB64()
+        AuthorizedKeys.authorize(keyB64, "FingerprintUser")
+        val fp = Handshake.fingerprint(Handshake.decodePublicKey(keyB64))
+
+        val removed = AuthorizedKeys.removeEntryByFingerprint(fp)
+
+        assertEquals(keyB64, removed?.publicKeyBase64)
+        assertEquals("FingerprintUser", removed?.comment)
+        assertEquals(fp, removed?.fingerprint)
         assertFalse(AuthorizedKeys.isAuthorized(keyB64))
     }
 

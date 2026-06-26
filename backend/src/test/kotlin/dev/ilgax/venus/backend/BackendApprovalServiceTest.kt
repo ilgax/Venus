@@ -34,6 +34,7 @@ class BackendApprovalServiceTest {
         approvals = BackendApprovalService(platform, authHandler, sessionManager)
 
         mockkObject(AuthorizedKeys)
+        every { platform.config } returns BackendConfig(maxUsers = 10, authTimeoutSeconds = 60)
     }
 
     @After
@@ -83,7 +84,7 @@ class BackendApprovalServiceTest {
         every { platform.player(onlineUuid) } returns player
         every { sessionManager.removePendingApproval(offlineUuid) } returns offlineApproval
         every { sessionManager.removePendingApproval(onlineUuid) } returns onlineApproval
-        every { AuthorizedKeys.authorize(any(), any()) } just Runs
+        every { AuthorizedKeys.tryAuthorize(any(), any(), any()) } returns true
         every { authHandler.startApprovedChallenge(any(), any()) } just Runs
         every { platform.logger.info(any()) } just Runs
 
@@ -93,7 +94,7 @@ class BackendApprovalServiceTest {
         assertEquals(BackendApprovalResult(true, expected), result)
         verify { sessionManager.removePendingApproval(offlineUuid) }
         verify { sessionManager.removePendingApproval(onlineUuid) }
-        verify { AuthorizedKeys.authorize(onlineApproval.clientPublicKeyBase64, "TestPlayer") }
+        verify { AuthorizedKeys.tryAuthorize(onlineApproval.clientPublicKeyBase64, "TestPlayer", 10) }
     }
 
     @Test
@@ -104,7 +105,7 @@ class BackendApprovalServiceTest {
         every { sessionManager.getNextPendingApproval() } returns AbstractMap.SimpleEntry(uuid, approval)
         every { platform.player(uuid) } returns player
         every { sessionManager.removePendingApproval(uuid) } returns approval
-        every { AuthorizedKeys.authorize(any(), any()) } just Runs
+        every { AuthorizedKeys.tryAuthorize(any(), any(), any()) } returns true
         every { authHandler.startApprovedChallenge(any(), any()) } just Runs
         every { platform.logger.info(any()) } just Runs
 
@@ -112,8 +113,49 @@ class BackendApprovalServiceTest {
 
         val expected = "TestPlayer (key ${Handshake.fingerprint(approval.clientPublicKey)}) authorized."
         assertEquals(BackendApprovalResult(true, expected), result)
-        verify { AuthorizedKeys.authorize(approval.clientPublicKeyBase64, "TestPlayer") }
+        verify { AuthorizedKeys.tryAuthorize(approval.clientPublicKeyBase64, "TestPlayer", 10) }
         verify { authHandler.startApprovedChallenge(player, approval.clientPublicKey) }
+    }
+
+    @Test
+    fun `allowNextPending rejects queued approval when max users reached`() {
+        val uuid = UUID.randomUUID()
+        val approval = pendingApproval()
+        val player = BackendPlayer(uuid, "TestPlayer")
+        every { platform.config } returns BackendConfig(maxUsers = 1, authTimeoutSeconds = 60)
+        every { sessionManager.getNextPendingApproval() } returns AbstractMap.SimpleEntry(uuid, approval)
+        every { platform.player(uuid) } returns player
+        every { sessionManager.removePendingApproval(uuid) } returns approval
+        every { AuthorizedKeys.tryAuthorize(any(), any(), any()) } returns false
+        every { authHandler.notifyMaxUsers(player) } just Runs
+        every { authHandler.cancelPendingApproval(uuid) } just Runs
+        every { platform.logger.warning(any()) } just Runs
+
+        val result = approvals.allowNextPending()
+
+        assertEquals(
+            BackendApprovalResult(false, "Cannot authorize TestPlayer: max_users (1) reached."),
+            result,
+        )
+        verify { sessionManager.removePendingApproval(uuid) }
+        verify { authHandler.cancelPendingApproval(uuid) }
+        verify { authHandler.notifyMaxUsers(player) }
+        verify(exactly = 0) { authHandler.startApprovedChallenge(any(), any()) }
+    }
+
+    @Test
+    fun `deactivateSessionsForKey removes active sessions and invokes cleanup`() {
+        val keyPair = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
+        val publicKeyBase64 = Base64.getEncoder().encodeToString(keyPair.public.encoded)
+        val uuid = UUID.randomUUID()
+        val cleanupCalls = mutableListOf<UUID>()
+        approvals = BackendApprovalService(platform, authHandler, sessionManager, cleanupCalls::add)
+        every { sessionManager.deactivateByPublicKey(keyPair.public) } returns listOf(uuid)
+
+        val count = approvals.deactivateSessionsForKey(publicKeyBase64)
+
+        assertEquals(1, count)
+        assertEquals(listOf(uuid), cleanupCalls)
     }
 
     @Test

@@ -208,6 +208,10 @@ class BackendAuthHandler(
         sendAuthError(player, "auth_denied")
     }
 
+    fun notifyMaxUsers(player: BackendPlayer) {
+        sendAuthError(player, "auth_max_users")
+    }
+
     fun cancelPendingApproval(uuid: UUID) {
         approvalTimeoutTasks.remove(uuid)?.cancel()
     }

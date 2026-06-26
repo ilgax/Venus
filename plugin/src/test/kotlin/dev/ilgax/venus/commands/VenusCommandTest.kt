@@ -214,11 +214,14 @@ class VenusCommandTest {
     @Test
     fun `revoke by fingerprint removes key`() {
         every { stack.sender } returns consoleSender
-        every { AuthorizedKeys.removeByFingerprint("SHA256:abc==") } returns true
+        every { AuthorizedKeys.removeEntryByFingerprint("SHA256:abc==") } returns
+            AuthorizedKeys.Entry("key_b64", "Alice", "SHA256:abc==")
+        every { approvals.deactivateSessionsForKey("key_b64") } returns 1
 
         command.execute(stack, arrayOf("revoke", "SHA256:abc=="))
 
         verify { consoleSender.sendMessage("Revoked Venus key SHA256:abc==.") }
+        verify { approvals.deactivateSessionsForKey("key_b64") }
     }
 
     @Test
@@ -239,7 +242,7 @@ class VenusCommandTest {
     @Test
     fun `revoke with unknown fingerprint shows not found`() {
         every { stack.sender } returns consoleSender
-        every { AuthorizedKeys.removeByFingerprint("SHA256:nonexistent==") } returns false
+        every { AuthorizedKeys.removeEntryByFingerprint("SHA256:nonexistent==") } returns null
 
         command.execute(stack, arrayOf("revoke", "SHA256:nonexistent=="))
 

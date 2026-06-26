@@ -63,7 +63,14 @@ class BackendPlayersHandler(
             sendActionResult(player, packet, success = false, message = "Invalid player uuid.")
             return
         }
-        val result = platform.players().applyAction(player, packet)
+        val result =
+            try {
+                platform.players().applyAction(player, packet)
+            } catch (e: Exception) {
+                platform.logger.warning("${player.name} sent invalid player_action value: ${e.message}")
+                sendActionResult(player, packet, success = false, message = "Invalid player action value.")
+                return
+            }
         platform.sendData(player, json.encodeToString(result))
         if (result.success) {
             sendDetailSnapshot(player, UUID.fromString(packet.uuid))

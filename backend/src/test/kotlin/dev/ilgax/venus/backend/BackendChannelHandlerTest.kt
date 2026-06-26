@@ -57,6 +57,16 @@ class BackendChannelHandlerTest {
     }
 
     @Test
+    fun `multi-byte oversized packet is ignored by byte size`() {
+        val handler = createHandler(activeSession = false)
+        val oversized = "€".repeat(MAX_PACKET_SIZE / 2)
+
+        handler.handle(VenusChannels.HELLO, player, oversized)
+
+        verify(exactly = 0) { handler.auth.handleHello(any()) }
+    }
+
+    @Test
     fun `unknown channel is logged and ignored`() {
         val handler = createHandler(activeSession = false)
 

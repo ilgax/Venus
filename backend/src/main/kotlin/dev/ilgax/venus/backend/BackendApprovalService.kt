@@ -13,6 +13,7 @@ class BackendApprovalService(
     private val platform: BackendPlatform,
     private val authHandler: BackendAuthHandler,
     private val sessionManager: SessionManager,
+    private val cleanupActiveSession: (java.util.UUID) -> Unit = {},
 ) {
     fun allowNextPending(): BackendApprovalResult {
         while (true) {
@@ -29,7 +30,18 @@ class BackendApprovalService(
             }
 
             val fingerprint = Handshake.fingerprint(approval.clientPublicKey)
-            AuthorizedKeys.authorize(approval.clientPublicKeyBase64, player.name)
+            if (!AuthorizedKeys.tryAuthorize(approval.clientPublicKeyBase64, player.name, platform.config.maxUsers)) {
+                sessionManager.removePendingApproval(uuid)
+                authHandler.cancelPendingApproval(uuid)
+                authHandler.notifyMaxUsers(player)
+                platform.logger.warning(
+                    "${player.name} could not be authorized because max_users (${platform.config.maxUsers}) was reached.",
+                )
+                return BackendApprovalResult(
+                    success = false,
+                    message = "Cannot authorize ${player.name}: max_users (${platform.config.maxUsers}) reached.",
+                )
+            }
             sessionManager.removePendingApproval(uuid)
             authHandler.cancelPendingApproval(uuid)
             authHandler.startApprovedChallenge(player, approval.clientPublicKey)
@@ -55,5 +67,17 @@ class BackendApprovalService(
             val fingerprint = Handshake.fingerprint(approval.clientPublicKey)
             return BackendApprovalResult(success = true, message = "${player.name} (key $fingerprint) denied.")
         }
+    }
+
+    fun deactivateSessionsForKey(publicKeyBase64: String): Int {
+        val publicKey =
+            try {
+                Handshake.decodePublicKey(publicKeyBase64)
+            } catch (_: Exception) {
+                return 0
+            }
+        val deactivated = sessionManager.deactivateByPublicKey(publicKey)
+        deactivated.forEach(cleanupActiveSession)
+        return deactivated.size
     }
 }
