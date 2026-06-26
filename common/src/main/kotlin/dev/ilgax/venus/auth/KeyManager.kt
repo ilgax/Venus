@@ -155,7 +155,7 @@ class KeyManager(
         file.setWritable(false, false)
         file.setExecutable(false, false)
         file.setReadable(true, !privateOnly)
-        file.setWritable(true, true)
+        file.setWritable(true, !privateOnly)
     }
 
     private fun restrictDirectoryPermissionsFallback() {

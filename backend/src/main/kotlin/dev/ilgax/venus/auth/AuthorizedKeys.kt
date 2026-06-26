@@ -23,6 +23,7 @@ object AuthorizedKeys {
         loadFromDisk()
     }
 
+    @Synchronized
     private fun loadFromDisk() {
         keys.clear()
         keysFile.readLines().forEach { line ->

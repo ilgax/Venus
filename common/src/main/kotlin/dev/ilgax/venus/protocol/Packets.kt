@@ -8,27 +8,45 @@ import kotlinx.serialization.json.JsonElement
 data class ServerKeyPacket(
     val type: String,
     @SerialName("public_key") val publicKey: String,
-)
+) {
+    init {
+        require(publicKey.length <= MAX_KEY_FIELD_LENGTH) { "public_key must be at most $MAX_KEY_FIELD_LENGTH chars" }
+    }
+}
 
 @Serializable
 data class ClientKeyPacket(
     val type: String,
     @SerialName("public_key") val publicKey: String,
-)
+) {
+    init {
+        require(publicKey.length <= MAX_KEY_FIELD_LENGTH) { "public_key must be at most $MAX_KEY_FIELD_LENGTH chars" }
+    }
+}
 
 @Serializable
 data class AuthChallengePacket(
     val type: String,
     val challenge: String,
     @SerialName("server_sig") val serverSignature: String,
-)
+) {
+    init {
+        require(challenge.length <= MAX_KEY_FIELD_LENGTH) { "challenge must be at most $MAX_KEY_FIELD_LENGTH chars" }
+        require(serverSignature.length <= MAX_KEY_FIELD_LENGTH) { "server_sig must be at most $MAX_KEY_FIELD_LENGTH chars" }
+    }
+}
 
 @Serializable
 data class AuthResponsePacket(
     val type: String,
     val challenge: String,
     @SerialName("client_sig") val clientSignature: String,
-)
+) {
+    init {
+        require(challenge.length <= MAX_KEY_FIELD_LENGTH) { "challenge must be at most $MAX_KEY_FIELD_LENGTH chars" }
+        require(clientSignature.length <= MAX_KEY_FIELD_LENGTH) { "client_sig must be at most $MAX_KEY_FIELD_LENGTH chars" }
+    }
+}
 
 @Serializable
 data class ReadyPacket(
@@ -39,7 +57,11 @@ data class ReadyPacket(
 data class ErrorPacket(
     val type: String,
     val reason: String,
-)
+) {
+    init {
+        require(reason.length <= MAX_REASON_LENGTH) { "reason must be at most $MAX_REASON_LENGTH chars" }
+    }
+}
 
 @Serializable
 data class StatSubscribePacket(
@@ -130,7 +152,11 @@ data class PlayerActionResultPacket(
     val action: String,
     val success: Boolean,
     val message: String,
-)
+) {
+    init {
+        require(message.length <= MAX_ACTION_MESSAGE_LENGTH) { "message must be at most $MAX_ACTION_MESSAGE_LENGTH chars" }
+    }
+}
 
 @Serializable
 data class PlayerSummaryPacket(
@@ -206,6 +232,9 @@ const val MAX_STATS_ENTRIES: Int = 32
 const val MAX_COMMAND_LENGTH: Int = 256
 const val MAX_LINES_PER_PACKET: Int = 100
 const val MAX_PLAYERS_PER_LIST: Int = 200
+const val MAX_KEY_FIELD_LENGTH: Int = 512
+const val MAX_REASON_LENGTH: Int = 256
+const val MAX_ACTION_MESSAGE_LENGTH: Int = 256
 const val PRE_AUTH_RATE_LIMIT: Int = 5
 const val PRE_AUTH_RATE_WINDOW_MS: Long = 10_000
 

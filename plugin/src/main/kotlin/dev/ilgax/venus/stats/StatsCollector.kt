@@ -18,12 +18,24 @@ object StatsCollector {
 
     fun getRamMax(): Long = Runtime.getRuntime().maxMemory() / 1024 / 1024
 
+    @Volatile
+    private var cachedCpuLoad: Double? = null
+
+    @Volatile
+    private var cpuLoadCachedAt: Long = 0L
+
     fun getCpuLoad(): Double? {
+        val now = System.currentTimeMillis()
+        val cached = cachedCpuLoad
+        if (cached != null && now - cpuLoadCachedAt < CPU_LOAD_CACHE_MS) return cached
         val bean = ManagementFactory.getOperatingSystemMXBean()
         if (bean !is com.sun.management.OperatingSystemMXBean) return null
         val load = bean.processCpuLoad
         if (load < 0.0) return null
-        return roundToOneDecimal((load * 100.0).coerceIn(0.0, 100.0))
+        val rounded = roundToOneDecimal((load * 100.0).coerceIn(0.0, 100.0))
+        cachedCpuLoad = rounded
+        cpuLoadCachedAt = now
+        return rounded
     }
 
     fun getUptime(): Long =
@@ -57,4 +69,6 @@ object StatsCollector {
             )
         return json.encodeToString(packet)
     }
+
+    private const val CPU_LOAD_CACHE_MS = 2000L
 }

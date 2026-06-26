@@ -4,6 +4,7 @@ import dev.ilgax.venus.auth.KeyManager
 import dev.ilgax.venus.auth.ServerKeyStore
 import dev.ilgax.venus.channel.ChannelClient
 import dev.ilgax.venus.channel.PacketHandler
+import dev.ilgax.venus.config.FabricVenusConfig
 import dev.ilgax.venus.gui.AuthToasts
 import dev.ilgax.venus.keybind.PanelKeybind
 import dev.ilgax.venus.state.SessionState
@@ -30,10 +31,12 @@ class VenusMod : ClientModInitializer {
 
         val json = Json { ignoreUnknownKeys = true }
         val log: (String) -> Unit = { LOGGER.info(it) }
+        val config = FabricVenusConfig(venusFolder, LoggerFactory.getLogger("Venus-Config"))
+        config.load()
         channelClient = ChannelClient(json, keyManager, log, AuthToasts::failure)
         val packetHandler = PacketHandler(json, channelClient::sendCommand, log, AuthToasts::success, AuthToasts::failure)
         channelClient.register(packetHandler)
-        PanelKeybind.register(channelClient)
+        PanelKeybind.register(channelClient, config)
 
         ClientPlayConnectionEvents.JOIN.register { _, _, _ ->
             val server = Minecraft.getInstance().currentServer

@@ -139,13 +139,17 @@ private class PaperBackendPlayers(
     private val plugin: JavaPlugin,
 ) : BackendPlayers {
     override fun list(viewer: BackendPlayer): PlayerListPacket {
+        val bannedUuids =
+            plugin.server.bannedPlayers
+                .map { it.uniqueId }
+                .toSet()
         val onlinePlayers =
             plugin.server.onlinePlayers
-                .mapNotNull { onlinePlayer -> onlinePlayer.toSummary(blocked = isBlocked(onlinePlayer)) }
+                .mapNotNull { onlinePlayer -> onlinePlayer.toSummary(blocked = onlinePlayer.uniqueId in bannedUuids) }
                 .sortedWith(playerSummaryComparator())
         val whitelistedPlayers =
             plugin.server.whitelistedPlayers
-                .mapNotNull { offlinePlayer -> offlinePlayer.toSummary(blocked = isBlocked(offlinePlayer)) }
+                .mapNotNull { offlinePlayer -> offlinePlayer.toSummary(blocked = offlinePlayer.uniqueId in bannedUuids) }
                 .sortedWith(playerSummaryComparator())
         val blockedPlayers =
             plugin.server.bannedPlayers
@@ -294,7 +298,14 @@ private class PaperBackendPlayers(
         plugin.server.getPlayer(uuid)
             ?: plugin.server.whitelistedPlayers.firstOrNull { it.uniqueId == uuid }
             ?: plugin.server.bannedPlayers.firstOrNull { it.uniqueId == uuid }
-            ?: plugin.server.offlinePlayers.firstOrNull { it.uniqueId == uuid }
+            ?: tryGetOfflinePlayer(uuid)
+
+    private fun tryGetOfflinePlayer(uuid: UUID): OfflinePlayer? =
+        try {
+            plugin.server.getOfflinePlayer(uuid)
+        } catch (_: Exception) {
+            null
+        }
 
     private fun PlayerActionPacket.toResult(
         success: Boolean,

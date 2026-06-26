@@ -11,6 +11,7 @@ import java.time.format.DateTimeFormatter
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicInteger
 
 class BackendLogHandler(
     private val platform: BackendPlatform,
@@ -18,6 +19,7 @@ class BackendLogHandler(
     private val sessionManager: SessionManager,
 ) {
     private val queue = ConcurrentLinkedQueue<LogLine>()
+    private val queueSize = AtomicInteger(0)
     private val subscribers = ConcurrentHashMap<UUID, Boolean>()
     private val suppressedMarkers = ConcurrentHashMap<UUID, String>()
 
@@ -52,11 +54,20 @@ class BackendLogHandler(
     }
 
     fun queueFormattedLine(line: String) {
-        val suppressed = suppressedMarkers.entries.firstOrNull { (_, marker) -> line.contains(marker) }?.key
-        if (suppressed != null) suppressedMarkers.remove(suppressed)
+        val suppressed =
+            synchronized(suppressedMarkers) {
+                val entry = suppressedMarkers.entries.firstOrNull { (_, marker) -> line.contains(marker) }
+                if (entry != null) {
+                    suppressedMarkers.remove(entry.key)
+                    entry.key
+                } else {
+                    null
+                }
+            }
         queue.add(LogLine(line, suppressed))
-        while (queue.size > MAX_QUEUE_LINES) {
-            queue.poll()
+        queueSize.incrementAndGet()
+        while (queueSize.get() > MAX_QUEUE_LINES) {
+            if (queue.poll() != null) queueSize.decrementAndGet() else break
         }
     }
 
@@ -69,8 +80,12 @@ class BackendLogHandler(
     fun flush() {
         if (subscribers.isEmpty() || queue.isEmpty()) return
         val lines = mutableListOf<LogLine>()
-        repeat(MAX_LINES_PER_PACKET) {
-            lines.add(queue.poll() ?: return@repeat)
+        var drained = 0
+        while (drained < MAX_LINES_PER_PACKET) {
+            val line = queue.poll() ?: break
+            queueSize.decrementAndGet()
+            lines.add(line)
+            drained++
         }
         if (lines.isEmpty()) return
         subscribers.keys.forEach { uuid ->

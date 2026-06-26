@@ -87,6 +87,20 @@ class ChannelClient(
         sendCommand(data)
     }
 
+    fun sendStatSubscribe() {
+        val data =
+            json.encodeToString(
+                dev.ilgax.venus.protocol.StatSubscribePacket
+                    .serializer(),
+                dev.ilgax.venus.protocol.StatSubscribePacket(
+                    type = "stat_subscribe",
+                    intervalSeconds = 1,
+                    stats = listOf("tps", "ram", "mspt", "uptime", "players", "server", "cpu"),
+                ),
+            )
+        sendCommand(data)
+    }
+
     fun sendPlayerListGet() {
         val data =
             json.encodeToString(
