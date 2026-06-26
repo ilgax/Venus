@@ -36,5 +36,22 @@ class FabricVenusConfigTest {
         assertEquals(120, loaded.authTimeoutSeconds)
     }
 
+    @Test
+    fun `load falls back for invalid config values`() {
+        val dataFolder = createTempDirectory("venus-fabric-config").toFile()
+        dataFolder.resolve("config.yml").writeText(
+            """
+            max_users: 0
+            auth_timeout_seconds: -1
+            """.trimIndent() + "\n",
+        )
+        val config = FabricVenusConfig(dataFolder, logger())
+
+        val loaded = config.load()
+
+        assertEquals(1, loaded.maxUsers)
+        assertEquals(60, loaded.authTimeoutSeconds)
+    }
+
     private fun logger(): Logger = org.slf4j.helpers.NOPLogger.NOP_LOGGER
 }

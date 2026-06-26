@@ -99,12 +99,12 @@ class BackendAuthHandler(
                 json.decodeFromString<AuthResponsePacket>(data)
             } catch (e: Exception) {
                 platform.logger.warning("Malformed auth response packet from ${player.name}: ${e.message}")
-                sendAuthError(player, "auth_invalid_response")
+                failPendingAuth(player, "auth_invalid_response")
                 return
             }
         if (packet.type != "auth_response") {
             platform.logger.warning("Invalid auth response packet type from ${player.name}: ${packet.type}")
-            sendAuthError(player, "auth_invalid_response")
+            failPendingAuth(player, "auth_invalid_response")
             return
         }
         val pending = sessionManager.getPending(player.uuid)
@@ -118,8 +118,7 @@ class BackendAuthHandler(
                 Base64.getDecoder().decode(packet.challenge)
             } catch (_: IllegalArgumentException) {
                 platform.logger.warning("Invalid Base64 in auth challenge from ${player.name}")
-                sendAuthError(player, "auth_invalid_response")
-                sessionManager.removePending(player.uuid)
+                failPendingAuth(player, "auth_invalid_response")
                 return
             }
         val clientSig =
@@ -127,15 +126,13 @@ class BackendAuthHandler(
                 Base64.getDecoder().decode(packet.clientSignature)
             } catch (_: IllegalArgumentException) {
                 platform.logger.warning("Invalid Base64 in auth signature from ${player.name}")
-                sendAuthError(player, "auth_invalid_response")
-                sessionManager.removePending(player.uuid)
+                failPendingAuth(player, "auth_invalid_response")
                 return
             }
 
         if (!challenge.contentEquals(pending.challenge)) {
             platform.logger.warning("Challenge mismatch from ${player.name}")
-            sendAuthError(player, "auth_invalid_response")
-            sessionManager.removePending(player.uuid)
+            failPendingAuth(player, "auth_invalid_response")
             return
         }
 
@@ -149,8 +146,7 @@ class BackendAuthHandler(
             )
         ) {
             platform.logger.warning("Invalid signature from ${player.name} - rejecting")
-            sendAuthError(player, "auth_invalid_response")
-            sessionManager.removePending(player.uuid)
+            failPendingAuth(player, "auth_invalid_response")
             return
         }
 
@@ -305,5 +301,14 @@ class BackendAuthHandler(
                 ErrorPacket(type = "error", reason = reason),
             )
         platform.sendError(player, data)
+    }
+
+    private fun failPendingAuth(
+        player: BackendPlayer,
+        reason: String,
+    ) {
+        sendAuthError(player, reason)
+        sessionManager.removePending(player.uuid)
+        sessionTimeoutTasks.remove(player.uuid)?.cancel()
     }
 }

@@ -24,9 +24,18 @@ class FabricVenusConfig(
         val values = parse(configFile.readLines())
         current =
             BackendConfig(
-                maxUsers = values["max_users"]?.toIntOrNull() ?: BackendConfig.DEFAULT_MAX_USERS,
+                maxUsers =
+                    positiveOrDefault(
+                        value = values["max_users"]?.toIntOrNull() ?: BackendConfig.DEFAULT_MAX_USERS,
+                        defaultValue = BackendConfig.DEFAULT_MAX_USERS,
+                        key = "max_users",
+                    ),
                 authTimeoutSeconds =
-                    values["auth_timeout_seconds"]?.toIntOrNull() ?: BackendConfig.DEFAULT_AUTH_TIMEOUT_SECONDS,
+                    positiveOrDefault(
+                        value = values["auth_timeout_seconds"]?.toIntOrNull() ?: BackendConfig.DEFAULT_AUTH_TIMEOUT_SECONDS,
+                        defaultValue = BackendConfig.DEFAULT_AUTH_TIMEOUT_SECONDS,
+                        key = "auth_timeout_seconds",
+                    ),
             )
         logger.info(
             "Fabric config loaded - max_users: ${current.maxUsers}, auth_timeout: ${current.authTimeoutSeconds}s",
@@ -44,6 +53,16 @@ class FabricVenusConfig(
                 val value = line.substringAfter(':').trim()
                 key to value
             }
+
+    private fun positiveOrDefault(
+        value: Int,
+        defaultValue: Int,
+        key: String,
+    ): Int {
+        if (value >= 1) return value
+        logger.warn("Invalid Fabric Venus config {}={}; using default {}.", key, value, defaultValue)
+        return defaultValue
+    }
 
     private fun defaultConfigContents(): String =
         """

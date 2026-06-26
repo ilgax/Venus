@@ -11,6 +11,7 @@ import java.security.PublicKey
 import java.security.spec.PKCS8EncodedKeySpec
 import java.security.spec.X509EncodedKeySpec
 import java.util.Base64
+import java.util.concurrent.ConcurrentHashMap
 
 class KeyManager(
     dataFolder: java.io.File,
@@ -38,16 +39,18 @@ class KeyManager(
 
     @Synchronized
     fun loadOrGenerate() {
-        val privateExists = privateKeyFile.exists()
-        val publicExists = publicKeyFile.exists()
-        when {
-            privateExists && publicExists -> load()
-            !privateExists && !publicExists -> generate()
-            else ->
-                throw IllegalStateException(
-                    "Venus key files in inconsistent state: private exists=$privateExists, public exists=$publicExists. " +
-                        "Refusing to silently regenerate server identity. Delete both files to regenerate, or restore the missing file.",
-                )
+        synchronized(lockFor(privateKeyFile.toPath(), publicKeyFile.toPath())) {
+            val privateExists = privateKeyFile.exists()
+            val publicExists = publicKeyFile.exists()
+            when {
+                privateExists && publicExists -> load()
+                !privateExists && !publicExists -> generate()
+                else ->
+                    throw IllegalStateException(
+                        "Venus key files in inconsistent state: private exists=$privateExists, public exists=$publicExists. " +
+                            "Refusing to silently regenerate server identity. Delete both files to regenerate, or restore the missing file.",
+                    )
+            }
         }
     }
 
@@ -96,10 +99,14 @@ class KeyManager(
         bytes: ByteArray,
         privateOnly: Boolean,
     ) {
-        val tmp = target.resolveSibling(target.fileName.toString() + ".tmp")
-        Files.write(tmp, bytes)
-        restrictPermissions(tmp, privateOnly)
-        Files.move(tmp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+        val tmp = Files.createTempFile(target.parent, target.fileName.toString(), ".tmp")
+        try {
+            Files.write(tmp, bytes)
+            restrictPermissions(tmp, privateOnly)
+            Files.move(tmp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+        } finally {
+            Files.deleteIfExists(tmp)
+        }
     }
 
     private fun restrictPermissions(
@@ -158,5 +165,20 @@ class KeyManager(
         keysFolder.setReadable(true, true)
         keysFolder.setWritable(true, true)
         keysFolder.setExecutable(true, true)
+    }
+
+    private fun lockFor(
+        privateKeyPath: Path,
+        publicKeyPath: Path,
+    ): Any {
+        val key =
+            privateKeyPath.toAbsolutePath().normalize().toString() +
+                "|" +
+                publicKeyPath.toAbsolutePath().normalize().toString()
+        return loadLocks.computeIfAbsent(key) { Any() }
+    }
+
+    companion object {
+        private val loadLocks = ConcurrentHashMap<String, Any>()
     }
 }

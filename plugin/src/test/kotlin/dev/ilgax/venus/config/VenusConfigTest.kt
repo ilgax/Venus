@@ -44,4 +44,20 @@ class VenusConfigTest {
         assertEquals(5, VenusConfig.maxUsers)
         assertEquals(120, VenusConfig.authTimeoutSeconds)
     }
+
+    @Test
+    fun `load falls back for invalid values`() {
+        val plugin = mockk<JavaPlugin>(relaxed = true)
+        val config = mockk<FileConfiguration>(relaxed = true)
+
+        every { plugin.config } returns config
+        every { plugin.logger } returns Logger.getAnonymousLogger()
+        every { config.getInt("max_users", any()) } returns 0
+        every { config.getInt("auth_timeout_seconds", any()) } returns -1
+
+        VenusConfig.load(plugin)
+
+        assertEquals(1, VenusConfig.maxUsers)
+        assertEquals(60, VenusConfig.authTimeoutSeconds)
+    }
 }

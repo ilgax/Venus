@@ -32,6 +32,7 @@ class BackendAuthHandlerTest {
     private lateinit var authHandler: BackendAuthHandler
     private lateinit var scheduler: BackendScheduler
     private lateinit var logger: BackendLogger
+    private lateinit var task: BackendTask
 
     private val serverKeyPair = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
     private val clientKeyPair = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
@@ -53,7 +54,7 @@ class BackendAuthHandlerTest {
         every { platform.scheduler } returns scheduler
         every { platform.config } returns
             BackendConfig(maxUsers = 1, authTimeoutSeconds = 60)
-        val task = mockk<BackendTask>(relaxed = true)
+        task = mockk(relaxed = true)
         every { scheduler.runLater(any(), any()) } returns task
 
         authHandler = BackendAuthHandler(platform, json, keyManager, subscriptions, sessionManager)
@@ -184,6 +185,31 @@ class BackendAuthHandlerTest {
         verify { platform.sendError(player, match<String> { it.contains("auth_invalid_response") }) }
         assertTrue(sessionManager.getPending(player.uuid) == null)
         assertTrue(!sessionManager.isActive(player.uuid))
+    }
+
+    @Test
+    fun `handleAuthResponse with invalid signature cancels auth timeout task`() {
+        val player = BackendPlayer(UUID.randomUUID(), "TestPlayer")
+        val clientKeyB64 = Base64.getEncoder().encodeToString(clientKeyPair.public.encoded)
+        every { AuthorizedKeys.isAuthorized(clientKeyB64) } returns true
+        val keyData = json.encodeToString(ClientKeyPacket.serializer(), ClientKeyPacket("client_key", clientKeyB64))
+        authHandler.handleClientKey(player, keyData)
+        val challenge = sessionManager.getPending(player.uuid)!!.challenge
+        val badSig = ByteArray(64)
+        val response =
+            json.encodeToString(
+                AuthResponsePacket.serializer(),
+                AuthResponsePacket(
+                    "auth_response",
+                    Base64.getEncoder().encodeToString(challenge),
+                    Base64.getEncoder().encodeToString(badSig),
+                ),
+            )
+
+        authHandler.handleAuthResponse(player, response)
+
+        verify { task.cancel() }
+        assertTrue(sessionManager.getPending(player.uuid) == null)
     }
 
     @Test

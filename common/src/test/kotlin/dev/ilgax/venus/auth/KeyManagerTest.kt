@@ -3,6 +3,7 @@ package dev.ilgax.venus.auth
 import java.nio.file.Files
 import java.security.KeyPairGenerator
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.test.AfterTest
@@ -174,5 +175,38 @@ class KeyManagerTest {
         val km2 = KeyManager(tempDir)
         km2.loadOrGenerate()
         assertEquals(km.publicKeyBase64, km2.publicKeyBase64)
+    }
+
+    @Test
+    fun `concurrent loadOrGenerate across instances does not corrupt keys`() {
+        val threadCount = 10
+        val startLatch = CountDownLatch(1)
+        val doneLatch = CountDownLatch(threadCount)
+        val results = ConcurrentHashMap.newKeySet<String>()
+        val errors = ConcurrentLinkedQueue<Throwable>()
+
+        repeat(threadCount) {
+            Thread {
+                try {
+                    startLatch.await()
+                    val km = KeyManager(tempDir)
+                    km.loadOrGenerate()
+                    results.add(km.publicKeyBase64)
+                } catch (e: Throwable) {
+                    errors.add(e)
+                } finally {
+                    doneLatch.countDown()
+                }
+            }.start()
+        }
+
+        startLatch.countDown()
+        assertTrue(doneLatch.await(10, TimeUnit.SECONDS))
+        assertTrue(errors.isEmpty(), "No thread should fail: ${errors.map { it.message }}")
+        assertEquals(1, results.size, "All instances should see the same public key")
+
+        val km = KeyManager(tempDir)
+        km.loadOrGenerate()
+        assertEquals(results.single(), km.publicKeyBase64)
     }
 }
