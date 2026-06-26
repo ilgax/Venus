@@ -3,7 +3,6 @@ package dev.ilgax.venus.backend
 import dev.ilgax.venus.auth.SessionManager
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.mockkObject
 import io.mockk.unmockkAll
 import io.mockk.verify
 import kotlinx.serialization.json.Json
@@ -40,9 +39,7 @@ class BackendPacketRouterTest {
 
     @Test
     fun `handleCommand ignores packet without active session`() {
-        val router = createRouter()
-        mockkObject(SessionManager)
-        every { SessionManager.isActive(player.uuid) } returns false
+        val router = createRouter(activeSession = false)
 
         router.handleCommand(player, """{"type":"console_cmd"}""")
 
@@ -51,9 +48,7 @@ class BackendPacketRouterTest {
 
     @Test
     fun `handleCommand routes console command`() {
-        val router = createRouter()
-        mockkObject(SessionManager)
-        every { SessionManager.isActive(player.uuid) } returns true
+        val router = createRouter(activeSession = true)
         val data = """{"type":"console_cmd"}"""
 
         router.handleCommand(player, data)
@@ -63,9 +58,7 @@ class BackendPacketRouterTest {
 
     @Test
     fun `handleCommand routes log subscription`() {
-        val router = createRouter()
-        mockkObject(SessionManager)
-        every { SessionManager.isActive(player.uuid) } returns true
+        val router = createRouter(activeSession = true)
         val data = """{"type":"log_subscribe"}"""
 
         router.handleCommand(player, data)
@@ -75,9 +68,7 @@ class BackendPacketRouterTest {
 
     @Test
     fun `handleCommand routes player action`() {
-        val router = createRouter()
-        mockkObject(SessionManager)
-        every { SessionManager.isActive(player.uuid) } returns true
+        val router = createRouter(activeSession = true)
         val data = """{"type":"player_action"}"""
 
         router.handleCommand(player, data)
@@ -87,9 +78,7 @@ class BackendPacketRouterTest {
 
     @Test
     fun `handleCommand ignores valid json with invalid type shape`() {
-        val router = createRouter()
-        mockkObject(SessionManager)
-        every { SessionManager.isActive(player.uuid) } returns true
+        val router = createRouter(activeSession = true)
         val data = """{"type":{}}"""
 
         router.handleCommand(player, data)
@@ -99,7 +88,65 @@ class BackendPacketRouterTest {
         verify(exactly = 0) { router.players.handleAction(any(), any()) }
     }
 
-    private fun createRouter(): RouterFixture {
+    @Test
+    fun `inactive session blocks all seven routes`() {
+        val router = createRouter(activeSession = false)
+
+        router.handleCommand(player, """{"type":"console_cmd"}""")
+        router.handleCommand(player, """{"type":"log_subscribe"}""")
+        router.handleCommand(player, """{"type":"stat_subscribe"}""")
+        router.handleCommand(player, """{"type":"stat_get"}""")
+        router.handleCommand(player, """{"type":"player_list_get"}""")
+        router.handleCommand(player, """{"type":"player_detail_get"}""")
+        router.handleCommand(player, """{"type":"player_action"}""")
+
+        verify(exactly = 0) { router.console.handle(any(), any()) }
+        verify(exactly = 0) { router.log.handleSubscribe(any(), any()) }
+        verify(exactly = 0) { router.stats.handleSubscribe(any(), any()) }
+        verify(exactly = 0) { router.stats.handleGet(any(), any()) }
+        verify(exactly = 0) { router.players.handleListGet(any(), any()) }
+        verify(exactly = 0) { router.players.handleDetailGet(any(), any()) }
+        verify(exactly = 0) { router.players.handleAction(any(), any()) }
+    }
+
+    @Test
+    fun `handleCommand handles deeply nested JSON without crashing`() {
+        val router = createRouter(activeSession = true)
+        val deeplyNested = """{"type":""" + "{\"a:".repeat(500) + "1" + "}".repeat(500) + "}"
+
+        router.handleCommand(player, deeplyNested)
+
+        verify(exactly = 0) { router.console.handle(any(), any()) }
+    }
+
+    @Test
+    fun `handleCommand handles missing type field`() {
+        val router = createRouter(activeSession = true)
+
+        router.handleCommand(player, """{"data":"value"}""")
+
+        verify(exactly = 0) { router.console.handle(any(), any()) }
+    }
+
+    @Test
+    fun `handleCommand handles non-object JSON`() {
+        val router = createRouter(activeSession = true)
+
+        router.handleCommand(player, """"just a string"""")
+
+        verify(exactly = 0) { router.console.handle(any(), any()) }
+    }
+
+    @Test
+    fun `handleCommand handles unknown packet type gracefully`() {
+        val router = createRouter(activeSession = true)
+
+        router.handleCommand(player, """{"type":"file_get"}""")
+
+        verify(exactly = 0) { router.console.handle(any(), any()) }
+    }
+
+    private fun createRouter(activeSession: Boolean): RouterFixture {
         val platform = mockk<BackendPlatform>(relaxed = true)
         val logger = mockk<BackendLogger>(relaxed = true)
         every { platform.logger } returns logger
@@ -107,16 +154,20 @@ class BackendPacketRouterTest {
         val stats = mockk<BackendStatsHandler>(relaxed = true)
         val log = mockk<BackendLogHandler>(relaxed = true)
         val players = mockk<BackendPlayersHandler>(relaxed = true)
+        val sessionManager = mockk<SessionManager>(relaxed = true)
+        every { sessionManager.isActive(player.uuid) } returns activeSession
         return RouterFixture(
             console = console,
+            stats = stats,
             log = log,
             players = players,
-            router = BackendPacketRouter(platform, json, console, stats, log, players),
+            router = BackendPacketRouter(platform, json, console, stats, log, players, sessionManager),
         )
     }
 
     private data class RouterFixture(
         val console: BackendConsoleHandler,
+        val stats: BackendStatsHandler,
         val log: BackendLogHandler,
         val players: BackendPlayersHandler,
         val router: BackendPacketRouter,

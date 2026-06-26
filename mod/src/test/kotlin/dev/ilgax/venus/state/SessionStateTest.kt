@@ -19,7 +19,7 @@ class SessionStateTest {
     }
 
     @Test
-    fun `state retains active session stats and command responses`() {
+    fun `state retains active session stats and console output`() {
         val stats = StatsPacket(type = "stats", tps = 19.9, mspt = 23.4)
         val response = CmdResponsePacket(type = "cmd_response", command = "say hi", lines = listOf("hi"))
 
@@ -29,7 +29,6 @@ class SessionStateTest {
 
         assertTrue(SessionState.sessionActive)
         assertEquals(stats, SessionState.latestStats)
-        assertEquals(listOf(response), SessionState.commandResponses)
         assertEquals(listOf("> say hi", "hi"), SessionState.consoleLines)
     }
 
@@ -75,7 +74,7 @@ class SessionStateTest {
 
         assertFalse(SessionState.sessionActive)
         assertNull(SessionState.latestStats)
-        assertTrue(SessionState.commandResponses.isEmpty())
+        assertTrue(SessionState.consoleLines.isEmpty())
         assertNull(SessionState.serverAddress)
         assertNull(SessionState.serverListName)
         assertNull(SessionState.latestPlayerList)
@@ -91,18 +90,17 @@ class SessionStateTest {
     }
 
     @Test
-    fun `command response history retains multiple entries until reset`() {
+    fun `command response appends to console history until reset`() {
         val first = CmdResponsePacket("cmd_response", "say one", listOf("one"))
         val second = CmdResponsePacket("cmd_response", "say two", listOf("two"))
 
         SessionState.addCommandResponse(first)
         SessionState.addCommandResponse(second)
 
-        assertEquals(listOf(first, second), SessionState.commandResponses)
+        assertEquals(listOf("> say one", "one", "> say two", "two"), SessionState.consoleLines)
 
         SessionState.reset()
 
-        assertTrue(SessionState.commandResponses.isEmpty())
         assertTrue(SessionState.consoleLines.isEmpty())
     }
 
@@ -113,5 +111,14 @@ class SessionStateTest {
         assertEquals(500, SessionState.consoleLines.size)
         assertEquals("line 101", SessionState.consoleLines.first())
         assertEquals("line 600", SessionState.consoleLines.last())
+    }
+
+    @Test
+    fun `addConsoleLines with oversized batch is bounded to max`() {
+        SessionState.addConsoleLines((1..1000).map { "line $it" })
+
+        assertEquals(500, SessionState.consoleLines.size)
+        assertEquals("line 501", SessionState.consoleLines.first())
+        assertEquals("line 1000", SessionState.consoleLines.last())
     }
 }

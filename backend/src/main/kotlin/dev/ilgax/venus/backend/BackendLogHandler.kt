@@ -3,7 +3,6 @@ package dev.ilgax.venus.backend
 import dev.ilgax.venus.auth.SessionManager
 import dev.ilgax.venus.protocol.ConsoleLogPacket
 import dev.ilgax.venus.protocol.ConsoleLogSubscribePacket
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import java.time.Instant
 import java.time.ZoneId
@@ -15,6 +14,7 @@ import java.util.concurrent.ConcurrentLinkedQueue
 class BackendLogHandler(
     private val platform: BackendPlatform,
     private val json: Json,
+    private val sessionManager: SessionManager,
 ) {
     private val queue = ConcurrentLinkedQueue<LogLine>()
     private val subscribers = ConcurrentHashMap<UUID, Boolean>()
@@ -27,7 +27,7 @@ class BackendLogHandler(
         val packet =
             try {
                 json.decodeFromString<ConsoleLogSubscribePacket>(data)
-            } catch (e: SerializationException) {
+            } catch (e: Exception) {
                 platform.logger.warning("${player.name} sent malformed log_subscribe packet: ${e.message}")
                 return
             }
@@ -74,7 +74,7 @@ class BackendLogHandler(
         if (lines.isEmpty()) return
         subscribers.keys.forEach { uuid ->
             val player = platform.player(uuid)
-            if (player == null || !SessionManager.isActive(uuid)) {
+            if (player == null || !sessionManager.isActive(uuid)) {
                 unsubscribe(uuid)
                 return@forEach
             }

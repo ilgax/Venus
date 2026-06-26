@@ -8,6 +8,7 @@ import dev.ilgax.venus.backend.BackendPlayers
 import dev.ilgax.venus.backend.BackendScheduler
 import dev.ilgax.venus.backend.BackendTask
 import dev.ilgax.venus.config.VenusConfig
+import dev.ilgax.venus.protocol.MAX_PLAYERS_PER_LIST
 import dev.ilgax.venus.protocol.PlayerActionPacket
 import dev.ilgax.venus.protocol.PlayerActionResultPacket
 import dev.ilgax.venus.protocol.PlayerDetail
@@ -155,9 +156,9 @@ private class PaperBackendPlayers(
             type = "player_list",
             onlineCount = plugin.server.onlinePlayers.size,
             maxPlayers = plugin.server.maxPlayers,
-            onlinePlayers = onlinePlayers,
-            whitelistedPlayers = whitelistedPlayers,
-            blockedPlayers = blockedPlayers,
+            onlinePlayers = onlinePlayers.take(MAX_PLAYERS_PER_LIST),
+            whitelistedPlayers = whitelistedPlayers.take(MAX_PLAYERS_PER_LIST),
+            blockedPlayers = blockedPlayers.take(MAX_PLAYERS_PER_LIST),
         )
     }
 

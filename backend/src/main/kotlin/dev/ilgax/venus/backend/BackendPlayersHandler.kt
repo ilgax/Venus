@@ -3,7 +3,6 @@ package dev.ilgax.venus.backend
 import dev.ilgax.venus.protocol.PlayerActionPacket
 import dev.ilgax.venus.protocol.PlayerDetailGetPacket
 import dev.ilgax.venus.protocol.PlayerListGetPacket
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import java.util.UUID
 
@@ -17,7 +16,7 @@ class BackendPlayersHandler(
     ) {
         try {
             json.decodeFromString<PlayerListGetPacket>(data)
-        } catch (e: SerializationException) {
+        } catch (e: Exception) {
             platform.logger.warning("${player.name} sent malformed player_list_get packet: ${e.message}")
             return
         }
@@ -31,7 +30,7 @@ class BackendPlayersHandler(
         val packet =
             try {
                 json.decodeFromString<PlayerDetailGetPacket>(data)
-            } catch (e: SerializationException) {
+            } catch (e: Exception) {
                 platform.logger.warning("${player.name} sent malformed player_detail_get packet: ${e.message}")
                 return
             }
@@ -54,7 +53,7 @@ class BackendPlayersHandler(
         val packet =
             try {
                 json.decodeFromString<PlayerActionPacket>(data)
-            } catch (e: SerializationException) {
+            } catch (e: Exception) {
                 platform.logger.warning("${player.name} sent malformed player_action packet: ${e.message}")
                 return
             }

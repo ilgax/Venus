@@ -10,16 +10,18 @@ class BackendRuntime private constructor(
     val logHandler: BackendLogHandler,
     val statSubscriptions: BackendStatSubscriptionManager,
     val approvals: BackendApprovalService,
+    private val sessionManager: SessionManager,
 ) {
     fun onPlayerQuit(player: BackendPlayer) {
         authHandler.onPlayerQuit(player)
         logHandler.unsubscribe(player.uuid)
+        channelHandler.cleanupPlayer(player.uuid)
     }
 
     fun shutdown() {
         authHandler.cancelAllTimeouts()
         statSubscriptions.cancelAll()
-        SessionManager.clearAll()
+        sessionManager.clearAll()
     }
 
     companion object {
@@ -28,9 +30,17 @@ class BackendRuntime private constructor(
             json: Json,
             keyManager: KeyManager,
         ): BackendRuntime {
-            val statSubscriptions = BackendStatSubscriptionManager(platform)
-            val logHandler = BackendLogHandler(platform, json)
-            val authHandler = BackendAuthHandler(platform, json, keyManager, statSubscriptions)
+            val sessionManager = SessionManager()
+            val statSubscriptions = BackendStatSubscriptionManager(platform, sessionManager)
+            val logHandler = BackendLogHandler(platform, json, sessionManager)
+            val authHandler =
+                BackendAuthHandler(
+                    platform,
+                    json,
+                    keyManager,
+                    statSubscriptions,
+                    sessionManager,
+                )
             val packetRouter =
                 BackendPacketRouter(
                     platform,
@@ -41,13 +51,15 @@ class BackendRuntime private constructor(
                     BackendStatsHandler(platform, json, statSubscriptions),
                     logHandler,
                     BackendPlayersHandler(platform, json),
+                    sessionManager,
                 )
             return BackendRuntime(
                 authHandler = authHandler,
-                channelHandler = BackendChannelHandler(authHandler, packetRouter),
+                channelHandler = BackendChannelHandler(authHandler, packetRouter, sessionManager, platform.logger),
                 logHandler = logHandler,
                 statSubscriptions = statSubscriptions,
-                approvals = BackendApprovalService(platform, authHandler),
+                approvals = BackendApprovalService(platform, authHandler, sessionManager),
+                sessionManager = sessionManager,
             )
         }
     }

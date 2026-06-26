@@ -35,12 +35,8 @@ object SessionState {
     var latestPlayerActionResult: PlayerActionResultPacket? = null
         private set
 
-    private val responses = mutableListOf<CmdResponsePacket>()
     private val console = mutableListOf<String>()
     private val statHistory = mutableListOf<StatsPacket>()
-
-    val commandResponses: List<CmdResponsePacket>
-        get() = synchronized(responses) { responses.toList() }
 
     val consoleLines: List<String>
         get() = synchronized(console) { console.toList() }
@@ -64,8 +60,8 @@ object SessionState {
         latestStats = stats
         synchronized(statHistory) {
             statHistory.add(stats)
-            while (statHistory.size > MAX_STAT_HISTORY) {
-                statHistory.removeAt(0)
+            if (statHistory.size > MAX_STAT_HISTORY) {
+                statHistory.subList(0, statHistory.size - MAX_STAT_HISTORY).clear()
             }
         }
     }
@@ -83,17 +79,20 @@ object SessionState {
     }
 
     fun addCommandResponse(response: CmdResponsePacket) {
-        synchronized(responses) {
-            responses.add(response)
-        }
         addConsoleLines(listOf("> ${response.command}") + response.lines)
     }
 
     fun addConsoleLines(lines: List<String>) {
         synchronized(console) {
-            console.addAll(lines)
-            while (console.size > MAX_CONSOLE_LINES) {
-                console.removeAt(0)
+            val bounded =
+                if (lines.size > MAX_CONSOLE_LINES) {
+                    lines.takeLast(MAX_CONSOLE_LINES)
+                } else {
+                    lines
+                }
+            console.addAll(bounded)
+            if (console.size > MAX_CONSOLE_LINES) {
+                console.subList(0, console.size - MAX_CONSOLE_LINES).clear()
             }
         }
     }
@@ -112,9 +111,6 @@ object SessionState {
         latestPlayerList = null
         latestPlayerDetail = null
         latestPlayerActionResult = null
-        synchronized(responses) {
-            responses.clear()
-        }
         synchronized(console) {
             console.clear()
         }

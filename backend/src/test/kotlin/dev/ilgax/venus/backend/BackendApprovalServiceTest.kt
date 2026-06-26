@@ -23,15 +23,16 @@ import kotlin.test.assertEquals
 class BackendApprovalServiceTest {
     private lateinit var platform: BackendPlatform
     private lateinit var authHandler: BackendAuthHandler
+    private lateinit var sessionManager: SessionManager
     private lateinit var approvals: BackendApprovalService
 
     @Before
     fun setup() {
         platform = mockk(relaxed = true)
         authHandler = mockk(relaxed = true)
-        approvals = BackendApprovalService(platform, authHandler)
+        sessionManager = mockk(relaxed = true)
+        approvals = BackendApprovalService(platform, authHandler, sessionManager)
 
-        mockkObject(SessionManager)
         mockkObject(AuthorizedKeys)
     }
 
@@ -42,7 +43,7 @@ class BackendApprovalServiceTest {
 
     @Test
     fun `allowNextPending returns no pending message`() {
-        every { SessionManager.getNextPendingApproval() } returns null
+        every { sessionManager.getNextPendingApproval() } returns null
 
         val result = approvals.allowNextPending()
 
@@ -53,14 +54,15 @@ class BackendApprovalServiceTest {
     fun `allowNextPending removes offline player approval`() {
         val uuid = UUID.randomUUID()
         val approval = pendingApproval()
-        every { SessionManager.getNextPendingApproval() } returnsMany listOf(AbstractMap.SimpleEntry(uuid, approval), null)
+        every { sessionManager.getNextPendingApproval() } returnsMany
+            listOf(AbstractMap.SimpleEntry(uuid, approval), null)
         every { platform.player(uuid) } returns null
-        every { SessionManager.removePendingApproval(uuid) } returns approval
+        every { sessionManager.removePendingApproval(uuid) } returns approval
 
         val result = approvals.allowNextPending()
 
         assertEquals(BackendApprovalResult(false, "No pending Venus requests."), result)
-        verify { SessionManager.removePendingApproval(uuid) }
+        verify { sessionManager.removePendingApproval(uuid) }
     }
 
     @Test
@@ -71,7 +73,7 @@ class BackendApprovalServiceTest {
         val onlineApproval = pendingApproval()
         val player = BackendPlayer(onlineUuid, "TestPlayer")
         every {
-            SessionManager.getNextPendingApproval()
+            sessionManager.getNextPendingApproval()
         } returnsMany
             listOf(
                 AbstractMap.SimpleEntry(offlineUuid, offlineApproval),
@@ -79,8 +81,8 @@ class BackendApprovalServiceTest {
             )
         every { platform.player(offlineUuid) } returns null
         every { platform.player(onlineUuid) } returns player
-        every { SessionManager.removePendingApproval(offlineUuid) } returns offlineApproval
-        every { SessionManager.removePendingApproval(onlineUuid) } returns onlineApproval
+        every { sessionManager.removePendingApproval(offlineUuid) } returns offlineApproval
+        every { sessionManager.removePendingApproval(onlineUuid) } returns onlineApproval
         every { AuthorizedKeys.authorize(any(), any()) } just Runs
         every { authHandler.startApprovedChallenge(any(), any()) } just Runs
         every { platform.logger.info(any()) } just Runs
@@ -89,8 +91,8 @@ class BackendApprovalServiceTest {
 
         val expected = "TestPlayer (key ${Handshake.fingerprint(onlineApproval.clientPublicKey)}) authorized."
         assertEquals(BackendApprovalResult(true, expected), result)
-        verify { SessionManager.removePendingApproval(offlineUuid) }
-        verify { SessionManager.removePendingApproval(onlineUuid) }
+        verify { sessionManager.removePendingApproval(offlineUuid) }
+        verify { sessionManager.removePendingApproval(onlineUuid) }
         verify { AuthorizedKeys.authorize(onlineApproval.clientPublicKeyBase64, "TestPlayer") }
     }
 
@@ -99,9 +101,9 @@ class BackendApprovalServiceTest {
         val uuid = UUID.randomUUID()
         val approval = pendingApproval()
         val player = BackendPlayer(uuid, "TestPlayer")
-        every { SessionManager.getNextPendingApproval() } returns AbstractMap.SimpleEntry(uuid, approval)
+        every { sessionManager.getNextPendingApproval() } returns AbstractMap.SimpleEntry(uuid, approval)
         every { platform.player(uuid) } returns player
-        every { SessionManager.removePendingApproval(uuid) } returns approval
+        every { sessionManager.removePendingApproval(uuid) } returns approval
         every { AuthorizedKeys.authorize(any(), any()) } just Runs
         every { authHandler.startApprovedChallenge(any(), any()) } just Runs
         every { platform.logger.info(any()) } just Runs
@@ -116,7 +118,7 @@ class BackendApprovalServiceTest {
 
     @Test
     fun `denyNextPending returns no pending message`() {
-        every { SessionManager.getNextPendingApproval() } returns null
+        every { sessionManager.getNextPendingApproval() } returns null
 
         val result = approvals.denyNextPending()
 
@@ -128,9 +130,9 @@ class BackendApprovalServiceTest {
         val uuid = UUID.randomUUID()
         val approval = pendingApproval()
         val player = BackendPlayer(uuid, "DeniedPlayer")
-        every { SessionManager.getNextPendingApproval() } returns AbstractMap.SimpleEntry(uuid, approval)
+        every { sessionManager.getNextPendingApproval() } returns AbstractMap.SimpleEntry(uuid, approval)
         every { platform.player(uuid) } returns player
-        every { SessionManager.removePendingApproval(uuid) } returns approval
+        every { sessionManager.removePendingApproval(uuid) } returns approval
         every { authHandler.notifyDenied(player) } just Runs
 
         val result = approvals.denyNextPending()
@@ -148,7 +150,7 @@ class BackendApprovalServiceTest {
         val onlineApproval = pendingApproval()
         val player = BackendPlayer(onlineUuid, "DeniedPlayer")
         every {
-            SessionManager.getNextPendingApproval()
+            sessionManager.getNextPendingApproval()
         } returnsMany
             listOf(
                 AbstractMap.SimpleEntry(offlineUuid, offlineApproval),
@@ -156,16 +158,16 @@ class BackendApprovalServiceTest {
             )
         every { platform.player(offlineUuid) } returns null
         every { platform.player(onlineUuid) } returns player
-        every { SessionManager.removePendingApproval(offlineUuid) } returns offlineApproval
-        every { SessionManager.removePendingApproval(onlineUuid) } returns onlineApproval
+        every { sessionManager.removePendingApproval(offlineUuid) } returns offlineApproval
+        every { sessionManager.removePendingApproval(onlineUuid) } returns onlineApproval
         every { authHandler.notifyDenied(player) } just Runs
 
         val result = approvals.denyNextPending()
 
         val expected = "DeniedPlayer (key ${Handshake.fingerprint(onlineApproval.clientPublicKey)}) denied."
         assertEquals(BackendApprovalResult(true, expected), result)
-        verify { SessionManager.removePendingApproval(offlineUuid) }
-        verify { SessionManager.removePendingApproval(onlineUuid) }
+        verify { sessionManager.removePendingApproval(offlineUuid) }
+        verify { sessionManager.removePendingApproval(onlineUuid) }
         verify { authHandler.notifyDenied(player) }
     }
 

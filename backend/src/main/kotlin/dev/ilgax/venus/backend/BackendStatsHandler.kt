@@ -2,7 +2,6 @@ package dev.ilgax.venus.backend
 
 import dev.ilgax.venus.protocol.StatGetPacket
 import dev.ilgax.venus.protocol.StatSubscribePacket
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 
 class BackendStatsHandler(
@@ -17,7 +16,7 @@ class BackendStatsHandler(
         val packet =
             try {
                 json.decodeFromString<StatSubscribePacket>(data)
-            } catch (e: SerializationException) {
+            } catch (e: Exception) {
                 platform.logger.warning("${player.name} sent malformed stat_subscribe packet: ${e.message}")
                 return
             }
@@ -31,7 +30,7 @@ class BackendStatsHandler(
         val packet =
             try {
                 json.decodeFromString<StatGetPacket>(data)
-            } catch (e: SerializationException) {
+            } catch (e: Exception) {
                 platform.logger.warning("${player.name} sent malformed stat_get packet: ${e.message}")
                 return
             }

@@ -1,7 +1,6 @@
 package dev.ilgax.venus.backend
 
 import dev.ilgax.venus.auth.SessionManager
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -30,12 +29,13 @@ class BackendPacketRouter(
     private val statsHandler: BackendStatsHandler,
     private val logHandler: BackendLogHandler,
     private val playersHandler: BackendPlayersHandler,
+    private val sessionManager: SessionManager,
 ) {
     fun handleCommand(
         player: BackendPlayer,
         data: String,
     ) {
-        if (!SessionManager.isActive(player.uuid)) {
+        if (!sessionManager.isActive(player.uuid)) {
             platform.logger.warning("${player.name} sent cmd packet without active session - ignoring")
             return
         }
@@ -43,7 +43,7 @@ class BackendPacketRouter(
         val jsonElement =
             try {
                 json.parseToJsonElement(data)
-            } catch (e: SerializationException) {
+            } catch (e: Throwable) {
                 platform.logger.warning("${player.name} sent malformed cmd packet: ${e.message}")
                 return
             }
@@ -58,15 +58,19 @@ class BackendPacketRouter(
                 return
             }
 
-        when (BackendCommandRoute.fromPacketType(type)) {
-            BackendCommandRoute.CONSOLE_CMD -> consoleHandler.handle(player, data)
-            BackendCommandRoute.LOG_SUBSCRIBE -> logHandler.handleSubscribe(player, data)
-            BackendCommandRoute.STAT_SUBSCRIBE -> statsHandler.handleSubscribe(player, data)
-            BackendCommandRoute.STAT_GET -> statsHandler.handleGet(player, data)
-            BackendCommandRoute.PLAYER_LIST_GET -> playersHandler.handleListGet(player, data)
-            BackendCommandRoute.PLAYER_DETAIL_GET -> playersHandler.handleDetailGet(player, data)
-            BackendCommandRoute.PLAYER_ACTION -> playersHandler.handleAction(player, data)
-            null -> platform.logger.warning("${player.name} sent unknown cmd packet type: $type")
+        try {
+            when (BackendCommandRoute.fromPacketType(type)) {
+                BackendCommandRoute.CONSOLE_CMD -> consoleHandler.handle(player, data)
+                BackendCommandRoute.LOG_SUBSCRIBE -> logHandler.handleSubscribe(player, data)
+                BackendCommandRoute.STAT_SUBSCRIBE -> statsHandler.handleSubscribe(player, data)
+                BackendCommandRoute.STAT_GET -> statsHandler.handleGet(player, data)
+                BackendCommandRoute.PLAYER_LIST_GET -> playersHandler.handleListGet(player, data)
+                BackendCommandRoute.PLAYER_DETAIL_GET -> playersHandler.handleDetailGet(player, data)
+                BackendCommandRoute.PLAYER_ACTION -> playersHandler.handleAction(player, data)
+                null -> platform.logger.warning("${player.name} sent unknown cmd packet type: $type")
+            }
+        } catch (e: Throwable) {
+            platform.logger.warning("Unexpected error handling cmd packet ($type) from ${player.name}: ${e.message}")
         }
     }
 }

@@ -40,7 +40,7 @@ class PacketHandlerTest {
         assertEquals(1, successToasts)
         val subscription = json.decodeFromString(StatSubscribePacket.serializer(), sent.single())
         assertEquals("stat_subscribe", subscription.type)
-        assertEquals(1, subscription.intervalSeconds)
+        assertEquals(2, subscription.intervalSeconds)
         assertEquals(listOf("tps", "ram", "mspt", "uptime", "players", "server", "cpu"), subscription.stats)
     }
 
@@ -67,7 +67,6 @@ class PacketHandlerTest {
         handler.handleData(json.encodeToString(CmdResponsePacket.serializer(), response))
 
         assertEquals(stats, SessionState.latestStats)
-        assertEquals(listOf(response), SessionState.commandResponses)
         assertEquals(listOf("[INFO]: started", "> say hi", "hi"), SessionState.consoleLines)
     }
 
@@ -158,7 +157,7 @@ class PacketHandlerTest {
         handler.handleData("""{"type":"cmd_response","command":"say hi"}""")
 
         assertEquals(stats, SessionState.latestStats)
-        assertEquals(listOf(response), SessionState.commandResponses)
+        assertEquals(listOf("> say hi", "hi"), SessionState.consoleLines)
     }
 
     @Test
@@ -191,6 +190,6 @@ class PacketHandlerTest {
 
         assertFalse(SessionState.sessionActive)
         assertNull(SessionState.latestStats)
-        assertTrue(SessionState.commandResponses.isEmpty())
+        assertTrue(SessionState.consoleLines.isEmpty())
     }
 }

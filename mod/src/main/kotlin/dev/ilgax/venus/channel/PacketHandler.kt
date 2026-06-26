@@ -42,7 +42,7 @@ class PacketHandler(
                 StatSubscribePacket.serializer(),
                 StatSubscribePacket(
                     type = "stat_subscribe",
-                    intervalSeconds = 1,
+                    intervalSeconds = 2,
                     stats = listOf("tps", "ram", "mspt", "uptime", "players", "server", "cpu"),
                 ),
             )

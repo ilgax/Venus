@@ -2,7 +2,6 @@ package dev.ilgax.venus.auth
 
 import java.security.KeyPairGenerator
 import java.util.UUID
-import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -14,51 +13,45 @@ import kotlin.test.assertTrue
 class SessionManagerTest {
     private val keyPair = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
     private val uuid = UUID.randomUUID()
-
-    @AfterTest
-    fun teardown() {
-        SessionManager.deactivate(uuid)
-        SessionManager.removePending(uuid)
-        SessionManager.removePendingApproval(uuid)
-    }
+    private val sessionManager = SessionManager()
 
     @Test
     fun `addPending and getPending roundtrip`() {
         val challenge = ByteArray(32) { it.toByte() }
         val session = PendingSession(keyPair.public, challenge)
-        SessionManager.addPending(uuid, session)
-        val stored = SessionManager.getPending(uuid)
+        sessionManager.addPending(uuid, session)
+        val stored = sessionManager.getPending(uuid)
         assertNotNull(stored)
         assertEquals(session, stored)
     }
 
     @Test
     fun `getPending returns null for unknown uuid`() {
-        assertNull(SessionManager.getPending(UUID.randomUUID()))
+        assertNull(sessionManager.getPending(UUID.randomUUID()))
     }
 
     @Test
     fun `removePending removes and returns session`() {
         val session = PendingSession(keyPair.public, ByteArray(32) { 42 })
-        SessionManager.addPending(uuid, session)
-        val removed = SessionManager.removePending(uuid)
+        sessionManager.addPending(uuid, session)
+        val removed = sessionManager.removePending(uuid)
         assertEquals(session, removed)
-        assertNull(SessionManager.getPending(uuid))
+        assertNull(sessionManager.getPending(uuid))
     }
 
     @Test
     fun `addPendingApproval and getPendingApproval roundtrip`() {
         val approval = PendingApproval(keyPair.public, keyPair.public.encoded.toString())
-        SessionManager.addPendingApproval(uuid, approval)
-        assertEquals(approval, SessionManager.getPendingApproval(uuid))
+        sessionManager.addPendingApproval(uuid, approval)
+        assertEquals(approval, sessionManager.getPendingApproval(uuid))
     }
 
     @Test
     fun `removePendingApproval removes and returns`() {
         val approval = PendingApproval(keyPair.public, keyPair.public.encoded.toString())
-        SessionManager.addPendingApproval(uuid, approval)
-        assertEquals(approval, SessionManager.removePendingApproval(uuid))
-        assertNull(SessionManager.getPendingApproval(uuid))
+        sessionManager.addPendingApproval(uuid, approval)
+        assertEquals(approval, sessionManager.removePendingApproval(uuid))
+        assertNull(sessionManager.getPendingApproval(uuid))
     }
 
     @Test
@@ -67,14 +60,9 @@ class SessionManagerTest {
         val uuid2 = UUID.randomUUID()
         val approval1 = PendingApproval(keyPair.public, "key1")
         val approval2 = PendingApproval(keyPair.public, "key2")
-        try {
-            SessionManager.addPendingApproval(uuid1, approval1)
-            SessionManager.addPendingApproval(uuid2, approval2)
-            assertNotNull(SessionManager.getNextPendingApproval())
-        } finally {
-            SessionManager.removePendingApproval(uuid1)
-            SessionManager.removePendingApproval(uuid2)
-        }
+        sessionManager.addPendingApproval(uuid1, approval1)
+        sessionManager.addPendingApproval(uuid2, approval2)
+        assertNotNull(sessionManager.getNextPendingApproval())
     }
 
     @Test
@@ -83,50 +71,45 @@ class SessionManagerTest {
         val uuid2 = UUID.randomUUID()
         val approval1 = PendingApproval(keyPair.public, "key1")
         val approval2 = PendingApproval(keyPair.public, "key2")
-        try {
-            SessionManager.addPendingApproval(uuid1, approval1)
-            SessionManager.addPendingApproval(uuid2, approval2)
-            SessionManager.removePendingApproval(uuid1)
+        sessionManager.addPendingApproval(uuid1, approval1)
+        sessionManager.addPendingApproval(uuid2, approval2)
+        sessionManager.removePendingApproval(uuid1)
 
-            val next = SessionManager.getNextPendingApproval()
+        val next = sessionManager.getNextPendingApproval()
 
-            assertNotNull(next)
-            assertEquals(uuid2, next.key)
-            assertEquals(approval2, next.value)
-        } finally {
-            SessionManager.removePendingApproval(uuid1)
-            SessionManager.removePendingApproval(uuid2)
-        }
+        assertNotNull(next)
+        assertEquals(uuid2, next.key)
+        assertEquals(approval2, next.value)
     }
 
     @Test
     fun `getNextPendingApproval returns null when empty`() {
-        assertNull(SessionManager.getNextPendingApproval())
+        assertNull(sessionManager.getNextPendingApproval())
     }
 
     @Test
     fun `activate and isActive`() {
-        assertFalse(SessionManager.isActive(uuid))
-        SessionManager.activate(uuid, keyPair.public)
-        assertTrue(SessionManager.isActive(uuid))
+        assertFalse(sessionManager.isActive(uuid))
+        sessionManager.activate(uuid, keyPair.public)
+        assertTrue(sessionManager.isActive(uuid))
     }
 
     @Test
     fun `deactivate removes from active sessions`() {
-        SessionManager.activate(uuid, keyPair.public)
-        SessionManager.deactivate(uuid)
-        assertFalse(SessionManager.isActive(uuid))
+        sessionManager.activate(uuid, keyPair.public)
+        sessionManager.deactivate(uuid)
+        assertFalse(sessionManager.isActive(uuid))
     }
 
     @Test
     fun `deactivate removes all three associations`() {
-        SessionManager.addPending(uuid, PendingSession(keyPair.public, ByteArray(32) { 7 }))
-        SessionManager.addPendingApproval(uuid, PendingApproval(keyPair.public, "key"))
-        SessionManager.activate(uuid, keyPair.public)
-        SessionManager.deactivate(uuid)
-        assertFalse(SessionManager.isActive(uuid))
-        assertNull(SessionManager.getPending(uuid))
-        assertNull(SessionManager.getPendingApproval(uuid))
+        sessionManager.addPending(uuid, PendingSession(keyPair.public, ByteArray(32) { 7 }))
+        sessionManager.addPendingApproval(uuid, PendingApproval(keyPair.public, "key"))
+        sessionManager.activate(uuid, keyPair.public)
+        sessionManager.deactivate(uuid)
+        assertFalse(sessionManager.isActive(uuid))
+        assertNull(sessionManager.getPending(uuid))
+        assertNull(sessionManager.getPendingApproval(uuid))
     }
 
     @Test

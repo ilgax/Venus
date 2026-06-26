@@ -12,6 +12,7 @@ import dev.ilgax.venus.network.VenusRawAuthPayload
 import dev.ilgax.venus.network.VenusRawDataPayload
 import dev.ilgax.venus.network.VenusRawPayload
 import dev.ilgax.venus.network.VenusRawReadyPayload
+import dev.ilgax.venus.protocol.MAX_PLAYERS_PER_LIST
 import dev.ilgax.venus.protocol.PlayerActionPacket
 import dev.ilgax.venus.protocol.PlayerActionResultPacket
 import dev.ilgax.venus.protocol.PlayerDetail
@@ -216,9 +217,9 @@ private class FabricBackendPlayers(
             type = "player_list",
             onlineCount = onlinePlayers.size,
             maxPlayers = server?.maxPlayers ?: 0,
-            onlinePlayers = onlinePlayers,
-            whitelistedPlayers = whitelistedPlayers,
-            blockedPlayers = blockedPlayers,
+            onlinePlayers = onlinePlayers.take(MAX_PLAYERS_PER_LIST),
+            whitelistedPlayers = whitelistedPlayers.take(MAX_PLAYERS_PER_LIST),
+            blockedPlayers = blockedPlayers.take(MAX_PLAYERS_PER_LIST),
         )
     }
 

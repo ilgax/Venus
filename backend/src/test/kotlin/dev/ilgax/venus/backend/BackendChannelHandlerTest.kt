@@ -1,6 +1,9 @@
 package dev.ilgax.venus.backend
 
+import dev.ilgax.venus.auth.SessionManager
+import dev.ilgax.venus.protocol.MAX_PACKET_SIZE
 import dev.ilgax.venus.protocol.VenusChannels
+import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import java.util.UUID
@@ -27,23 +30,63 @@ class BackendChannelHandlerTest {
 
     @Test
     fun `handle routes hello`() {
-        val auth = mockk<BackendAuthHandler>(relaxed = true)
-        val router = mockk<BackendPacketRouter>(relaxed = true)
-        val handler = BackendChannelHandler(auth, router)
+        val handler = createHandler(activeSession = false)
 
         handler.handle(VenusChannels.HELLO, player, "hello data")
 
-        verify { auth.handleHello(player) }
+        verify { handler.auth.handleHello(player) }
     }
 
     @Test
     fun `handle routes cmd`() {
-        val auth = mockk<BackendAuthHandler>(relaxed = true)
-        val router = mockk<BackendPacketRouter>(relaxed = true)
-        val handler = BackendChannelHandler(auth, router)
+        val handler = createHandler(activeSession = true)
 
         handler.handle(VenusChannels.CMD, player, "cmd data")
 
-        verify { router.handleCommand(player, "cmd data") }
+        verify { handler.router.handleCommand(player, "cmd data") }
+    }
+
+    @Test
+    fun `oversized packet is ignored`() {
+        val handler = createHandler(activeSession = false)
+        val oversized = "x".repeat(MAX_PACKET_SIZE + 1)
+
+        handler.handle(VenusChannels.HELLO, player, oversized)
+
+        verify(exactly = 0) { handler.auth.handleHello(any()) }
+    }
+
+    @Test
+    fun `unknown channel is logged and ignored`() {
+        val handler = createHandler(activeSession = false)
+
+        handler.handle("venus:unknown", player, "data")
+
+        verify(exactly = 0) { handler.auth.handleHello(any()) }
+    }
+
+    private fun createHandler(activeSession: Boolean): HandlerFixture {
+        val auth = mockk<BackendAuthHandler>(relaxed = true)
+        val router = mockk<BackendPacketRouter>(relaxed = true)
+        val sessionManager = mockk<SessionManager>(relaxed = true)
+        val logger = mockk<BackendLogger>(relaxed = true)
+        every { sessionManager.isActive(player.uuid) } returns activeSession
+        return HandlerFixture(
+            auth = auth,
+            router = router,
+            handler = BackendChannelHandler(auth, router, sessionManager, logger),
+        )
+    }
+
+    private data class HandlerFixture(
+        val auth: BackendAuthHandler,
+        val router: BackendPacketRouter,
+        val handler: BackendChannelHandler,
+    ) {
+        fun handle(
+            channel: String,
+            player: BackendPlayer,
+            data: String,
+        ) = handler.handle(channel, player, data)
     }
 }

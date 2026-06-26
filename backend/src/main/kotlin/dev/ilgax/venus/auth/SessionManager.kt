@@ -30,7 +30,7 @@ data class PendingApproval(
     val requestId: String = UUID.randomUUID().toString(),
 )
 
-object SessionManager {
+class SessionManager {
     private val pendingSessions = ConcurrentHashMap<UUID, PendingSession>()
     private val pendingApprovals = ConcurrentHashMap<UUID, PendingApproval>()
     private val pendingApprovalOrder = ConcurrentLinkedQueue<UUID>()
@@ -61,12 +61,11 @@ object SessionManager {
 
     fun getNextPendingApproval(): Map.Entry<UUID, PendingApproval>? {
         while (true) {
-            val uuid = pendingApprovalOrder.peek() ?: return null
-            val approval = pendingApprovals[uuid]
+            val uuid = pendingApprovalOrder.poll() ?: return null
+            val approval = pendingApprovals.remove(uuid)
             if (approval != null) {
                 return AbstractMap.SimpleEntry(uuid, approval)
             }
-            pendingApprovalOrder.poll()
         }
     }
 

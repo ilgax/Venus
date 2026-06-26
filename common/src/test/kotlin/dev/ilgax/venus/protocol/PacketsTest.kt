@@ -4,6 +4,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class PacketsTest {
@@ -227,5 +228,91 @@ class PacketsTest {
         assertEquals(20.0, decoded.tps)
         assertEquals(null, decoded.onlinePlayers)
         assertEquals(null, decoded.serverName)
+    }
+
+    @Test
+    fun `StatSubscribePacket rejects interval below minimum`() {
+        assertFailsWith<IllegalArgumentException> {
+            StatSubscribePacket(type = "stat_subscribe", intervalSeconds = 1, stats = listOf("tps"))
+        }
+    }
+
+    @Test
+    fun `StatSubscribePacket rejects interval above maximum`() {
+        assertFailsWith<IllegalArgumentException> {
+            StatSubscribePacket(type = "stat_subscribe", intervalSeconds = 301, stats = listOf("tps"))
+        }
+    }
+
+    @Test
+    fun `StatSubscribePacket rejects too many stats`() {
+        assertFailsWith<IllegalArgumentException> {
+            StatSubscribePacket(
+                type = "stat_subscribe",
+                intervalSeconds = 5,
+                stats = List(MAX_STATS_ENTRIES + 1) { "stat$it" },
+            )
+        }
+    }
+
+    @Test
+    fun `StatGetPacket rejects too many stats`() {
+        assertFailsWith<IllegalArgumentException> {
+            StatGetPacket(type = "stat_get", stats = List(MAX_STATS_ENTRIES + 1) { "stat$it" })
+        }
+    }
+
+    @Test
+    fun `ConsoleCmdPacket rejects oversized command`() {
+        assertFailsWith<IllegalArgumentException> {
+            ConsoleCmdPacket(type = "console_cmd", command = "x".repeat(MAX_COMMAND_LENGTH + 1))
+        }
+    }
+
+    @Test
+    fun `ConsoleLogPacket rejects too many lines`() {
+        assertFailsWith<IllegalArgumentException> {
+            ConsoleLogPacket(type = "console_log", lines = List(MAX_LINES_PER_PACKET + 1) { "line" })
+        }
+    }
+
+    @Test
+    fun `CmdResponsePacket rejects oversized command`() {
+        assertFailsWith<IllegalArgumentException> {
+            CmdResponsePacket(
+                type = "cmd_response",
+                command = "x".repeat(MAX_COMMAND_LENGTH + 1),
+                lines = listOf("ok"),
+            )
+        }
+    }
+
+    @Test
+    fun `CmdResponsePacket rejects too many lines`() {
+        assertFailsWith<IllegalArgumentException> {
+            CmdResponsePacket(
+                type = "cmd_response",
+                command = "say hi",
+                lines = List(MAX_LINES_PER_PACKET + 1) { "line" },
+            )
+        }
+    }
+
+    @Test
+    fun `PlayerListPacket rejects too many online players`() {
+        val players =
+            List(MAX_PLAYERS_PER_LIST + 1) {
+                PlayerSummaryPacket("$it", "P$it", "P$it", true, false, false, false)
+            }
+        assertFailsWith<IllegalArgumentException> {
+            PlayerListPacket(
+                type = "player_list",
+                onlineCount = 0,
+                maxPlayers = 20,
+                onlinePlayers = players,
+                whitelistedPlayers = emptyList(),
+                blockedPlayers = emptyList(),
+            )
+        }
     }
 }

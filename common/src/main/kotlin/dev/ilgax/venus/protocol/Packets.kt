@@ -46,19 +46,32 @@ data class StatSubscribePacket(
     val type: String,
     @SerialName("interval_seconds") val intervalSeconds: Int = 2,
     val stats: List<String> = listOf("tps", "ram"),
-)
+) {
+    init {
+        require(intervalSeconds in 2..300) { "interval_seconds must be in 2..300" }
+        require(stats.size <= MAX_STATS_ENTRIES) { "stats list must have at most $MAX_STATS_ENTRIES entries" }
+    }
+}
 
 @Serializable
 data class StatGetPacket(
     val type: String,
     val stats: List<String> = listOf("tps", "ram"),
-)
+) {
+    init {
+        require(stats.size <= MAX_STATS_ENTRIES) { "stats list must have at most $MAX_STATS_ENTRIES entries" }
+    }
+}
 
 @Serializable
 data class ConsoleCmdPacket(
     val type: String,
     val command: String,
-)
+) {
+    init {
+        require(command.length <= MAX_COMMAND_LENGTH) { "command must be at most $MAX_COMMAND_LENGTH chars" }
+    }
+}
 
 @Serializable
 data class ConsoleLogSubscribePacket(
@@ -69,14 +82,23 @@ data class ConsoleLogSubscribePacket(
 data class ConsoleLogPacket(
     val type: String,
     val lines: List<String>,
-)
+) {
+    init {
+        require(lines.size <= MAX_LINES_PER_PACKET) { "lines must have at most $MAX_LINES_PER_PACKET entries" }
+    }
+}
 
 @Serializable
 data class CmdResponsePacket(
     val type: String,
     val command: String,
     val lines: List<String>,
-)
+) {
+    init {
+        require(command.length <= MAX_COMMAND_LENGTH) { "command must be at most $MAX_COMMAND_LENGTH chars" }
+        require(lines.size <= MAX_LINES_PER_PACKET) { "lines must have at most $MAX_LINES_PER_PACKET entries" }
+    }
+}
 
 @Serializable
 data class PlayerListGetPacket(
@@ -127,7 +149,13 @@ data class PlayerListPacket(
     @SerialName("online_players") val onlinePlayers: List<PlayerSummaryPacket>,
     @SerialName("whitelisted_players") val whitelistedPlayers: List<PlayerSummaryPacket>,
     @SerialName("blocked_players") val blockedPlayers: List<PlayerSummaryPacket>,
-)
+) {
+    init {
+        require(onlinePlayers.size <= MAX_PLAYERS_PER_LIST) { "online_players must have at most $MAX_PLAYERS_PER_LIST entries" }
+        require(whitelistedPlayers.size <= MAX_PLAYERS_PER_LIST) { "whitelisted_players must have at most $MAX_PLAYERS_PER_LIST entries" }
+        require(blockedPlayers.size <= MAX_PLAYERS_PER_LIST) { "blocked_players must have at most $MAX_PLAYERS_PER_LIST entries" }
+    }
+}
 
 @Serializable
 data class PlayerDetailPacket(
@@ -170,3 +198,11 @@ data class StatsPacket(
     @SerialName("server_name") val serverName: String? = null,
     @SerialName("minecraft_version") val minecraftVersion: String? = null,
 )
+
+const val MAX_PACKET_SIZE: Int = 16_384
+const val MAX_STATS_ENTRIES: Int = 32
+const val MAX_COMMAND_LENGTH: Int = 256
+const val MAX_LINES_PER_PACKET: Int = 100
+const val MAX_PLAYERS_PER_LIST: Int = 200
+const val PRE_AUTH_RATE_LIMIT: Int = 5
+const val PRE_AUTH_RATE_WINDOW_MS: Long = 10_000

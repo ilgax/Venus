@@ -12,7 +12,6 @@ import dev.ilgax.venus.protocol.ClientKeyPacket
 import dev.ilgax.venus.protocol.ErrorPacket
 import dev.ilgax.venus.protocol.ReadyPacket
 import dev.ilgax.venus.protocol.ServerKeyPacket
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import java.security.PublicKey
 import java.util.Base64
@@ -24,6 +23,7 @@ class BackendAuthHandler(
     private val json: Json,
     private val keyManager: KeyManager,
     private val subscriptions: BackendStatSubscriptionManager,
+    private val sessionManager: SessionManager,
 ) {
     private val sessionTimeoutTasks = ConcurrentHashMap<UUID, BackendTask>()
     private val approvalTimeoutTasks = ConcurrentHashMap<UUID, BackendTask>()
@@ -45,7 +45,7 @@ class BackendAuthHandler(
         val packet =
             try {
                 json.decodeFromString<ClientKeyPacket>(data)
-            } catch (e: SerializationException) {
+            } catch (e: Exception) {
                 platform.logger.warning("Malformed client key packet from ${player.name}: ${e.message}")
                 return
             }
@@ -79,7 +79,7 @@ class BackendAuthHandler(
             }
 
             val approval = PendingApproval(clientPublicKey, clientPublicKeyBase64)
-            SessionManager.addPendingApproval(player.uuid, approval)
+            sessionManager.addPendingApproval(player.uuid, approval)
             val fingerprint = Handshake.fingerprint(clientPublicKey)
             platform.logger.info(
                 "Venus connect request from key $fingerprint (claimed name: ${player.name}). Type 'venus allow' or 'venus deny'",
@@ -95,7 +95,7 @@ class BackendAuthHandler(
         val packet =
             try {
                 json.decodeFromString<AuthResponsePacket>(data)
-            } catch (e: SerializationException) {
+            } catch (e: Exception) {
                 platform.logger.warning("Malformed auth response packet from ${player.name}: ${e.message}")
                 sendAuthError(player, "auth_invalid_response")
                 return
@@ -105,7 +105,7 @@ class BackendAuthHandler(
             sendAuthError(player, "auth_invalid_response")
             return
         }
-        val pending = SessionManager.getPending(player.uuid)
+        val pending = sessionManager.getPending(player.uuid)
         if (pending == null) {
             platform.logger.warning("No pending session for ${player.name}")
             return
@@ -117,7 +117,7 @@ class BackendAuthHandler(
             } catch (_: IllegalArgumentException) {
                 platform.logger.warning("Invalid Base64 in auth challenge from ${player.name}")
                 sendAuthError(player, "auth_invalid_response")
-                SessionManager.removePending(player.uuid)
+                sessionManager.removePending(player.uuid)
                 return
             }
         val clientSig =
@@ -126,14 +126,14 @@ class BackendAuthHandler(
             } catch (_: IllegalArgumentException) {
                 platform.logger.warning("Invalid Base64 in auth signature from ${player.name}")
                 sendAuthError(player, "auth_invalid_response")
-                SessionManager.removePending(player.uuid)
+                sessionManager.removePending(player.uuid)
                 return
             }
 
         if (!challenge.contentEquals(pending.challenge)) {
             platform.logger.warning("Challenge mismatch from ${player.name}")
             sendAuthError(player, "auth_invalid_response")
-            SessionManager.removePending(player.uuid)
+            sessionManager.removePending(player.uuid)
             return
         }
 
@@ -148,13 +148,13 @@ class BackendAuthHandler(
         ) {
             platform.logger.warning("Invalid signature from ${player.name} - rejecting")
             sendAuthError(player, "auth_invalid_response")
-            SessionManager.removePending(player.uuid)
+            sessionManager.removePending(player.uuid)
             return
         }
 
-        SessionManager.removePending(player.uuid)
+        sessionManager.removePending(player.uuid)
         sessionTimeoutTasks.remove(player.uuid)?.cancel()
-        SessionManager.activate(player.uuid, pending.clientPublicKey)
+        sessionManager.activate(player.uuid, pending.clientPublicKey)
         platform.logger.info("Venus session active for ${player.name} (key ${Handshake.fingerprint(pending.clientPublicKey)})")
 
         val ready =
@@ -172,7 +172,7 @@ class BackendAuthHandler(
         val packet =
             try {
                 json.decodeFromString<ErrorPacket>(data)
-            } catch (e: SerializationException) {
+            } catch (e: Exception) {
                 platform.logger.warning("${player.name} sent malformed error packet: ${e.message}")
                 return
             }
@@ -213,10 +213,10 @@ class BackendAuthHandler(
     fun onPlayerQuit(player: BackendPlayer) {
         approvalTimeoutTasks.remove(player.uuid)?.cancel()
         sessionTimeoutTasks.remove(player.uuid)?.cancel()
-        SessionManager.removePendingApproval(player.uuid)
-        SessionManager.removePending(player.uuid)
-        if (SessionManager.isActive(player.uuid)) {
-            SessionManager.deactivate(player.uuid)
+        sessionManager.removePendingApproval(player.uuid)
+        sessionManager.removePending(player.uuid)
+        if (sessionManager.isActive(player.uuid)) {
+            sessionManager.deactivate(player.uuid)
             subscriptions.cancel(player.uuid)
         }
     }
@@ -234,7 +234,7 @@ class BackendAuthHandler(
         expireChallenge: Boolean,
     ) {
         approvalTimeoutTasks.remove(player.uuid)?.cancel()
-        SessionManager.removePendingApproval(player.uuid)
+        sessionManager.removePendingApproval(player.uuid)
         val challenge = Handshake.generateChallenge()
         val serverSig =
             Handshake.signTranscript(
@@ -244,7 +244,7 @@ class BackendAuthHandler(
                 Handshake.ROLE_SERVER,
                 keyManager.privateKey,
             )
-        SessionManager.addPending(player.uuid, PendingSession(clientPublicKey, challenge))
+        sessionManager.addPending(player.uuid, PendingSession(clientPublicKey, challenge))
         if (expireChallenge) {
             scheduleAuthChallengeTimeout(player)
         }
@@ -263,8 +263,8 @@ class BackendAuthHandler(
         sessionTimeoutTasks[uuid]?.cancel()
         sessionTimeoutTasks[uuid] =
             platform.scheduler.runLater(platform.config.authTimeoutSeconds * 20L) {
-                if (SessionManager.getPending(uuid) != null) {
-                    SessionManager.removePending(uuid)
+                if (sessionManager.getPending(uuid) != null) {
+                    sessionManager.removePending(uuid)
                     platform.logger.info("Auth challenge expired for ${player.name}")
                 }
                 sessionTimeoutTasks.remove(uuid)
@@ -279,10 +279,10 @@ class BackendAuthHandler(
         approvalTimeoutTasks[uuid]?.cancel()
         approvalTimeoutTasks[uuid] =
             platform.scheduler.runLater(platform.config.authTimeoutSeconds * 20L) {
-                val currentApproval = SessionManager.getPendingApproval(uuid)
+                val currentApproval = sessionManager.getPendingApproval(uuid)
                 if (currentApproval?.requestId == approval.requestId) {
                     platform.player(uuid)?.let { sendAuthError(it, "auth_timeout") }
-                    SessionManager.removePendingApproval(uuid)
+                    sessionManager.removePendingApproval(uuid)
                     platform.logger.info("Venus request from ${player.name} timed out.")
                 }
                 approvalTimeoutTasks.remove(uuid)

@@ -2,7 +2,7 @@ package dev.ilgax.venus.backend
 
 import dev.ilgax.venus.protocol.CmdResponsePacket
 import dev.ilgax.venus.protocol.ConsoleCmdPacket
-import kotlinx.serialization.SerializationException
+import dev.ilgax.venus.protocol.MAX_LINES_PER_PACKET
 import kotlinx.serialization.json.Json
 
 class BackendConsoleHandler(
@@ -17,7 +17,7 @@ class BackendConsoleHandler(
         val packet =
             try {
                 json.decodeFromString<ConsoleCmdPacket>(data)
-            } catch (e: SerializationException) {
+            } catch (e: Exception) {
                 platform.logger.warning("${player.name} sent malformed console_cmd packet: ${e.message}")
                 return
             }
@@ -36,7 +36,7 @@ class BackendConsoleHandler(
         val response =
             json.encodeToString(
                 CmdResponsePacket.serializer(),
-                CmdResponsePacket(type = "cmd_response", command = packet.command, lines = lines),
+                CmdResponsePacket(type = "cmd_response", command = packet.command, lines = lines.takeLast(MAX_LINES_PER_PACKET)),
             )
         platform.sendData(player, response)
     }

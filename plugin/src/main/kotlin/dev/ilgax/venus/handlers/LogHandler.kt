@@ -1,5 +1,6 @@
 package dev.ilgax.venus.handlers
 
+import dev.ilgax.venus.auth.SessionManager
 import dev.ilgax.venus.backend.BackendLogHandler
 import dev.ilgax.venus.backend.BackendPlatform
 import dev.ilgax.venus.platform.PaperBackendPlatform
@@ -25,18 +26,20 @@ class LogHandler {
         plugin: JavaPlugin,
         json: Json,
         sendData: (Player, String) -> Unit,
+        sessionManager: SessionManager,
     ) {
         this.plugin = plugin
-        delegate = BackendLogHandler(PaperBackendPlatform(plugin, sendDataPacket = sendData), json)
+        delegate = BackendLogHandler(PaperBackendPlatform(plugin, sendDataPacket = sendData), json, sessionManager)
     }
 
     internal constructor(
         plugin: JavaPlugin,
         platform: BackendPlatform,
         json: Json,
+        sessionManager: SessionManager,
     ) {
         this.plugin = plugin
-        delegate = BackendLogHandler(platform, json)
+        delegate = BackendLogHandler(platform, json, sessionManager)
     }
 
     internal constructor(

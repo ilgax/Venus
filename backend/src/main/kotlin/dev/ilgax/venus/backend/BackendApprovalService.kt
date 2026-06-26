@@ -12,24 +12,25 @@ data class BackendApprovalResult(
 class BackendApprovalService(
     private val platform: BackendPlatform,
     private val authHandler: BackendAuthHandler,
+    private val sessionManager: SessionManager,
 ) {
     fun allowNextPending(): BackendApprovalResult {
         while (true) {
             val entry =
-                SessionManager.getNextPendingApproval()
+                sessionManager.getNextPendingApproval()
                     ?: return BackendApprovalResult(success = false, message = "No pending Venus requests.")
 
             val (uuid, approval) = entry
             val player = platform.player(uuid)
             if (player == null) {
-                SessionManager.removePendingApproval(uuid)
+                sessionManager.removePendingApproval(uuid)
                 authHandler.cancelPendingApproval(uuid)
                 continue
             }
 
             val fingerprint = Handshake.fingerprint(approval.clientPublicKey)
             AuthorizedKeys.authorize(approval.clientPublicKeyBase64, player.name)
-            SessionManager.removePendingApproval(uuid)
+            sessionManager.removePendingApproval(uuid)
             authHandler.cancelPendingApproval(uuid)
             authHandler.startApprovedChallenge(player, approval.clientPublicKey)
             platform.logger.info("${player.name} (key $fingerprint) authorized via console.")
@@ -40,12 +41,12 @@ class BackendApprovalService(
     fun denyNextPending(): BackendApprovalResult {
         while (true) {
             val entry =
-                SessionManager.getNextPendingApproval()
+                sessionManager.getNextPendingApproval()
                     ?: return BackendApprovalResult(success = false, message = "No pending Venus requests.")
 
             val (uuid, approval) = entry
             val player = platform.player(uuid)
-            SessionManager.removePendingApproval(uuid)
+            sessionManager.removePendingApproval(uuid)
             authHandler.cancelPendingApproval(uuid)
             if (player == null) {
                 continue
