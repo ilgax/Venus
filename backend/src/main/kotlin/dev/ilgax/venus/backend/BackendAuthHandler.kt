@@ -10,6 +10,7 @@ import dev.ilgax.venus.protocol.AuthChallengePacket
 import dev.ilgax.venus.protocol.AuthResponsePacket
 import dev.ilgax.venus.protocol.ClientKeyPacket
 import dev.ilgax.venus.protocol.ErrorPacket
+import dev.ilgax.venus.protocol.LogSanitizer
 import dev.ilgax.venus.protocol.ReadyPacket
 import dev.ilgax.venus.protocol.ServerKeyPacket
 import kotlinx.serialization.json.Json
@@ -30,6 +31,7 @@ class BackendAuthHandler(
 
     fun handleHello(player: BackendPlayer) {
         sessionTimeoutTasks.remove(player.uuid)?.cancel()
+        sessionManager.removePending(player.uuid)
         val data =
             json.encodeToString(
                 ServerKeyPacket.serializer(),
@@ -191,7 +193,7 @@ class BackendAuthHandler(
                     "${player.name} rejected connection - server signature verification failed on client side (possible MITM)",
                 )
 
-            else -> platform.logger.warning("${player.name} sent error: $reason")
+            else -> platform.logger.warning("${player.name} sent error: ${LogSanitizer.sanitize(reason)}")
         }
     }
 

@@ -36,7 +36,6 @@ public class CustomPayloadMixin {
                     //noinspection unchecked
                     return (StreamCodec<FriendlyByteBuf, ? extends CustomPacketPayload>) original.create(null);
                 }
-                System.out.println("Venus FallbackProvider called for: " + identifier);
                 if (identifier.equals(Identifier.fromNamespaceAndPath("venus", "key"))) {
                     //noinspection unchecked
                     return (StreamCodec<FriendlyByteBuf, ? extends CustomPacketPayload>) (StreamCodec<?, ?>) VenusRawPayload.CODEC;

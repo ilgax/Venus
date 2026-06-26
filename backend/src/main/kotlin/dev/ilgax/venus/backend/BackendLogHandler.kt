@@ -3,6 +3,7 @@ package dev.ilgax.venus.backend
 import dev.ilgax.venus.auth.SessionManager
 import dev.ilgax.venus.protocol.ConsoleLogPacket
 import dev.ilgax.venus.protocol.ConsoleLogSubscribePacket
+import dev.ilgax.venus.protocol.LogSanitizer
 import kotlinx.serialization.json.Json
 import java.time.Instant
 import java.time.ZoneId
@@ -63,7 +64,7 @@ class BackendLogHandler(
         loggerName: String,
         message: String,
         instant: Instant = Instant.now(),
-    ): String = "[${TIME_FORMAT.format(instant)}] [$loggerName] $message"
+    ): String = "[${TIME_FORMAT.format(instant)}] [$loggerName] ${LogSanitizer.sanitize(message)}"
 
     fun flush() {
         if (subscribers.isEmpty() || queue.isEmpty()) return

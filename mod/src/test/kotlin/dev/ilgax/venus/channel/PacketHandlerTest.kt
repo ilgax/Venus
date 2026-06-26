@@ -33,6 +33,7 @@ class PacketHandlerTest {
         val sent = mutableListOf<String>()
         var successToasts = 0
         val handler = PacketHandler(json, sent::add, {}, { successToasts++ })
+        SessionState.markExpectingReady()
 
         handler.handleReady(json.encodeToString(ReadyPacket.serializer(), ReadyPacket("ready")))
 
@@ -134,9 +135,23 @@ class PacketHandlerTest {
         val sent = mutableListOf<String>()
         var successToasts = 0
         val handler = PacketHandler(json, sent::add, {}, { successToasts++ })
+        SessionState.markExpectingReady()
 
         handler.handleReady("""{"type":"stats"}""")
         handler.handleReady("""{"type":""")
+
+        assertFalse(SessionState.sessionActive)
+        assertTrue(sent.isEmpty())
+        assertEquals(0, successToasts)
+    }
+
+    @Test
+    fun `ready is ignored when not expecting handshake completion`() {
+        val sent = mutableListOf<String>()
+        var successToasts = 0
+        val handler = PacketHandler(json, sent::add, {}, { successToasts++ })
+
+        handler.handleReady(json.encodeToString(ReadyPacket.serializer(), ReadyPacket("ready")))
 
         assertFalse(SessionState.sessionActive)
         assertTrue(sent.isEmpty())

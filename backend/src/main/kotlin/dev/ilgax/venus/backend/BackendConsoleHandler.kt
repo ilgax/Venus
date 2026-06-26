@@ -2,6 +2,7 @@ package dev.ilgax.venus.backend
 
 import dev.ilgax.venus.protocol.CmdResponsePacket
 import dev.ilgax.venus.protocol.ConsoleCmdPacket
+import dev.ilgax.venus.protocol.LogSanitizer
 import dev.ilgax.venus.protocol.MAX_LINES_PER_PACKET
 import kotlinx.serialization.json.Json
 
@@ -25,7 +26,7 @@ class BackendConsoleHandler(
             platform.logger.warning("${player.name} sent blank console command - ignoring")
             return
         }
-        val executionLog = "${player.name} executed console command: ${packet.command}"
+        val executionLog = "${player.name} executed console command: ${LogSanitizer.redactCommand(packet.command)}"
         suppressOwnExecutionLog(player, executionLog)
         platform.logger.info(executionLog)
         val lines = mutableListOf<String>()

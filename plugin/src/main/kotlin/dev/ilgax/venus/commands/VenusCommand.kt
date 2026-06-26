@@ -12,6 +12,8 @@ class VenusCommand(
     private val plugin: VenusPlugin,
     private val approvals: BackendApprovalService,
 ) : BasicCommand {
+    override fun permission(): String = "venus.admin"
+
     override fun execute(
         stack: CommandSourceStack,
         args: Array<String>,

@@ -3,6 +3,7 @@ package dev.ilgax.venus.channel
 import dev.ilgax.venus.protocol.CmdResponsePacket
 import dev.ilgax.venus.protocol.ConsoleLogPacket
 import dev.ilgax.venus.protocol.ErrorPacket
+import dev.ilgax.venus.protocol.LogSanitizer
 import dev.ilgax.venus.protocol.PlayerActionResultPacket
 import dev.ilgax.venus.protocol.PlayerDetailPacket
 import dev.ilgax.venus.protocol.PlayerListPacket
@@ -10,6 +11,7 @@ import dev.ilgax.venus.protocol.ReadyPacket
 import dev.ilgax.venus.protocol.StatSubscribePacket
 import dev.ilgax.venus.protocol.StatsPacket
 import dev.ilgax.venus.state.SessionState
+import dev.ilgax.venus.state.SessionState.HandshakeState
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -33,8 +35,12 @@ class PacketHandler(
             log("Venus: unexpected ready packet type: ${packet.type}")
             return
         }
+        if (SessionState.handshakeState != HandshakeState.EXPECTING_READY) {
+            log("Venus: unexpected ready packet - not expecting handshake completion")
+            return
+        }
 
-        SessionState.activate()
+        SessionState.markActive()
         showAuthSuccess()
         log("Venus: session ready")
         val subscription =
@@ -84,8 +90,9 @@ class PacketHandler(
             log("Venus: unexpected error packet type: ${packet.type}")
             return
         }
-        showAuthFailure(authFailureMessage(packet.reason))
-        log("Venus: auth failed - ${packet.reason}")
+        val sanitizedReason = LogSanitizer.sanitize(packet.reason)
+        showAuthFailure(authFailureMessage(sanitizedReason))
+        log("Venus: auth failed - $sanitizedReason")
     }
 
     private fun handleStats(data: String) {

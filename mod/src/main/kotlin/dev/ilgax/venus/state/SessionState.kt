@@ -7,6 +7,12 @@ import dev.ilgax.venus.protocol.PlayerListPacket
 import dev.ilgax.venus.protocol.StatsPacket
 
 object SessionState {
+    enum class HandshakeState { IDLE, EXPECTING_READY, ACTIVE }
+
+    @Volatile
+    var handshakeState: HandshakeState = HandshakeState.IDLE
+        private set
+
     @Volatile
     var sessionActive: Boolean = false
         private set
@@ -44,8 +50,22 @@ object SessionState {
     val statsHistory: List<StatsPacket>
         get() = synchronized(statHistory) { statHistory.toList() }
 
-    fun activate() {
+    fun markExpectingReady() {
+        handshakeState = HandshakeState.EXPECTING_READY
+    }
+
+    fun markActive() {
+        handshakeState = HandshakeState.ACTIVE
         sessionActive = true
+    }
+
+    fun markIdle() {
+        handshakeState = HandshakeState.IDLE
+        sessionActive = false
+    }
+
+    fun activate() {
+        markActive()
     }
 
     fun setServerInfo(
@@ -104,7 +124,7 @@ object SessionState {
     }
 
     fun reset() {
-        sessionActive = false
+        markIdle()
         latestStats = null
         serverAddress = null
         serverListName = null

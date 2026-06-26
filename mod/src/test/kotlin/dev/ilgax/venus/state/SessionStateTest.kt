@@ -5,6 +5,7 @@ import dev.ilgax.venus.protocol.PlayerActionResultPacket
 import dev.ilgax.venus.protocol.PlayerDetail
 import dev.ilgax.venus.protocol.PlayerListPacket
 import dev.ilgax.venus.protocol.StatsPacket
+import dev.ilgax.venus.state.SessionState.HandshakeState
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -120,5 +121,45 @@ class SessionStateTest {
         assertEquals(500, SessionState.consoleLines.size)
         assertEquals("line 501", SessionState.consoleLines.first())
         assertEquals("line 1000", SessionState.consoleLines.last())
+    }
+
+    @Test
+    fun `handshake state starts idle`() {
+        assertEquals(HandshakeState.IDLE, SessionState.handshakeState)
+    }
+
+    @Test
+    fun `markExpectingReady transitions to expecting`() {
+        SessionState.markExpectingReady()
+
+        assertEquals(HandshakeState.EXPECTING_READY, SessionState.handshakeState)
+        assertFalse(SessionState.sessionActive)
+    }
+
+    @Test
+    fun `markActive transitions to active`() {
+        SessionState.markExpectingReady()
+        SessionState.markActive()
+
+        assertEquals(HandshakeState.ACTIVE, SessionState.handshakeState)
+        assertTrue(SessionState.sessionActive)
+    }
+
+    @Test
+    fun `markIdle resets to idle`() {
+        SessionState.markActive()
+        SessionState.markIdle()
+
+        assertEquals(HandshakeState.IDLE, SessionState.handshakeState)
+        assertFalse(SessionState.sessionActive)
+    }
+
+    @Test
+    fun `reset transitions to idle`() {
+        SessionState.markActive()
+        SessionState.reset()
+
+        assertEquals(HandshakeState.IDLE, SessionState.handshakeState)
+        assertFalse(SessionState.sessionActive)
     }
 }

@@ -87,8 +87,22 @@ class BackendConsoleHandlerTest {
         handler.handle(player, """{"type":"console_cmd","command":"say hi"}""")
 
         assertTrue(suppressCalled)
-        assertTrue(suppressMarker?.contains("say hi") == true)
-        verify { logger.info(match<String> { it.contains("say hi") }) }
+        assertTrue(suppressMarker!!.contains("say"))
+        assertTrue(!suppressMarker.contains("secret"))
+        verify { logger.info(match<String> { it.contains("say") && !it.contains("secret") }) }
+    }
+
+    @Test
+    fun `newlines in command are sanitized in log output`() {
+        val (platform, logger) = platformFixture()
+        val handler = BackendConsoleHandler(platform, json)
+        val player = BackendPlayer(UUID.randomUUID(), "TestPlayer")
+
+        every { platform.executeCommand(any(), any(), any()) } returns true
+
+        handler.handle(player, """{"type":"console_cmd","command":"say\\nfake log line"}""")
+
+        verify { logger.info(match<String> { !it.contains("\n") }) }
     }
 
     private fun platformFixture(): Pair<BackendPlatform, BackendLogger> {

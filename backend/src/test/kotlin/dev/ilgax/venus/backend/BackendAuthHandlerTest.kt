@@ -285,4 +285,16 @@ class BackendAuthHandlerTest {
 
         verify { logger.warning(match<String> { it.contains("signature verification failed") }) }
     }
+
+    @Test
+    fun `handleHello clears in-flight pending session and restarts flow`() {
+        val player = BackendPlayer(UUID.randomUUID(), "TestPlayer")
+        val challenge = Handshake.generateChallenge()
+        sessionManager.addPending(player.uuid, PendingSession(clientKeyPair.public, challenge))
+
+        authHandler.handleHello(player)
+
+        assertTrue(sessionManager.getPending(player.uuid) == null)
+        verify { platform.sendKey(player, any()) }
+    }
 }

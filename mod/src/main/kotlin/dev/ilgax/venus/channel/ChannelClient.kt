@@ -23,6 +23,7 @@ import dev.ilgax.venus.protocol.PlayerActionPacket
 import dev.ilgax.venus.protocol.PlayerDetailGetPacket
 import dev.ilgax.venus.protocol.PlayerListGetPacket
 import dev.ilgax.venus.protocol.ServerKeyPacket
+import dev.ilgax.venus.state.SessionState
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
@@ -264,6 +265,7 @@ class ChannelClient(
                 ),
             )
         ClientPlayNetworking.send(AuthResponsePayload(response))
+        SessionState.markExpectingReady()
     }
 
     private fun sendError(reason: String) {
@@ -281,6 +283,7 @@ class ChannelClient(
     ) {
         log(logMessage)
         showAuthFailure(toastMessage)
+        SessionState.markIdle()
     }
 
     private fun getServerAddress(): ServerKeyStore.ServerIdentity? {

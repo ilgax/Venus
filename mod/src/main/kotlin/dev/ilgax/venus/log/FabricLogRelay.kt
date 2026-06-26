@@ -13,6 +13,7 @@ class FabricLogRelay(
     private var appender: VenusLogAppender? = null
 
     fun start() {
+        if (appender != null) return
         val context = LogManager.getContext(false) as LoggerContext
         val rootLogger = context.configuration.rootLogger
         val newAppender =

@@ -26,9 +26,9 @@ class VenusPlugin :
     JavaPlugin(),
     Listener {
     private val json = Json { ignoreUnknownKeys = true }
-    private lateinit var runtime: BackendRuntime
-    private lateinit var logHandler: LogHandler
-    private lateinit var channelListener: ChannelListener
+    private var runtime: BackendRuntime? = null
+    private var logHandler: LogHandler? = null
+    private var channelListener: ChannelListener? = null
 
     override fun onEnable() {
         VenusConfig.load(this)
@@ -48,22 +48,23 @@ class VenusPlugin :
                 sendDataPacket = sendData,
             )
         runtime = BackendRuntime.create(platform, json, keyManager)
-        logHandler = LogHandler(this, runtime.logHandler)
-        channelListener = ChannelListener(runtime.channelHandler)
-        logHandler.start()
+        val rt = runtime!!
+        logHandler = LogHandler(this, rt.logHandler)
+        channelListener = ChannelListener(rt.channelHandler)
+        logHandler!!.start()
 
-        registerCommand("venus", VenusCommand(this, runtime.approvals))
+        registerCommand("venus", VenusCommand(this, rt.approvals))
         server.pluginManager.registerEvents(this, this)
 
         BackendIncomingChannel.entries.forEach { channel ->
-            server.messenger.registerIncomingPluginChannel(this, channel.channel, channelListener)
+            server.messenger.registerIncomingPluginChannel(this, channel.channel, channelListener!!)
         }
     }
 
     override fun onDisable() {
         logger.info("Venus disabled")
-        logHandler.stop()
-        runtime.shutdown()
+        logHandler?.stop()
+        runtime?.shutdown()
         BackendIncomingChannel.entries.forEach { channel ->
             server.messenger.unregisterIncomingPluginChannel(this, channel.channel)
         }
@@ -71,7 +72,7 @@ class VenusPlugin :
 
     @EventHandler
     fun onPlayerQuit(event: PlayerQuitEvent) {
-        runtime.onPlayerQuit(event.player.toBackendPlayer())
+        runtime?.onPlayerQuit(event.player.toBackendPlayer())
     }
 
     private fun sendPayloadToPlayer(
