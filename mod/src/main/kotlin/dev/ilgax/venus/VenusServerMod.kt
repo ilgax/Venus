@@ -10,6 +10,7 @@ import dev.ilgax.venus.network.ClientKeyPayload
 import dev.ilgax.venus.network.CmdPayload
 import dev.ilgax.venus.network.ErrorPayload
 import dev.ilgax.venus.network.HelloPayload
+import dev.ilgax.venus.network.TransferPayload
 import dev.ilgax.venus.network.VenusPayloads
 import dev.ilgax.venus.platform.FabricBackendPlatform
 import dev.ilgax.venus.platform.toBackendPlayer
@@ -116,6 +117,10 @@ class VenusServerMod : DedicatedServerModInitializer {
             val player = context.player()
             runtime.channelHandler.handle(VenusChannels.CMD, player.toBackendPlayer(), payload.data)
         }
+        ServerPlayNetworking.registerGlobalReceiver(TransferPayload.TYPE) { payload, context ->
+            val player = context.player()
+            runtime.channelHandler.handle(VenusChannels.TRANSFER, player.toBackendPlayer(), payload.data)
+        }
     }
 
     private fun handleAllow(source: CommandSourceStack): Int {
@@ -144,6 +149,7 @@ class VenusServerMod : DedicatedServerModInitializer {
             return 0
         }
         config.load()
+        runtime.files.reload()
         source.sendSystemMessage(Component.literal("Venus config reloaded."))
         LOGGER.info("Venus config reloaded by ${source.textName}.")
         return 1

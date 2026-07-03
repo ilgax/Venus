@@ -4,6 +4,7 @@ import dev.ilgax.venus.protocol.PlayerActionPacket
 import dev.ilgax.venus.protocol.PlayerActionResultPacket
 import dev.ilgax.venus.protocol.PlayerDetailPacket
 import dev.ilgax.venus.protocol.PlayerListPacket
+import java.nio.file.Path
 import java.util.UUID
 
 data class BackendPlayer(
@@ -57,6 +58,7 @@ interface BackendPlatform {
     val logger: BackendLogger
     val scheduler: BackendScheduler
     val config: BackendConfig
+    val serverDirectory: Path
 
     fun player(uuid: UUID): BackendPlayer?
 
@@ -81,6 +83,11 @@ interface BackendPlatform {
     )
 
     fun sendData(
+        player: BackendPlayer,
+        data: String,
+    )
+
+    fun sendTransfer(
         player: BackendPlayer,
         data: String,
     )

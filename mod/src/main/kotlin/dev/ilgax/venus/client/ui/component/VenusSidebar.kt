@@ -23,6 +23,7 @@ class VenusSidebar(
         listOf(
             VenusSidebarItem(VenusPage.DASHBOARD, "Dashboard", VenusIconButton.IconGlyph.REFRESH),
             VenusSidebarItem(VenusPage.PLAYERS, "Players", VenusIconButton.IconGlyph.SEARCH),
+            VenusSidebarItem(VenusPage.FILES, "Files", VenusIconButton.IconGlyph.PLUS),
             VenusSidebarItem(VenusPage.CONSOLE, "Console", VenusIconButton.IconGlyph.PLUS),
             VenusSidebarItem(VenusPage.AUTH, "Auth", VenusIconButton.IconGlyph.CHECK),
             VenusSidebarItem(VenusPage.SETTINGS, "Settings", VenusIconButton.IconGlyph.SETTINGS),

@@ -1,8 +1,12 @@
 package dev.ilgax.venus.config
 
 import dev.ilgax.venus.backend.BackendConfig
+import dev.ilgax.venus.backend.BackendFileConfig
+import dev.ilgax.venus.backend.BackendFileRoot
+import dev.ilgax.venus.backend.BackendFileRootMode
 import org.slf4j.Logger
 import java.io.File
+import java.util.Locale
 
 class FabricVenusConfig(
     private val dataFolder: File,
@@ -55,6 +59,7 @@ class FabricVenusConfig(
                         value = values["console_history_limit"]?.toIntOrNull() ?: BackendConfig.DEFAULT_CONSOLE_HISTORY_LIMIT,
                         key = "console_history_limit",
                     ),
+                files = parseFileConfig(configFile.readLines()),
             )
         logger.info(
             "Fabric config loaded - max_users: ${current.maxUsers}, auth_timeout: ${current.authTimeoutSeconds}s",
@@ -69,16 +74,89 @@ class FabricVenusConfig(
     }
 
     private fun serialize(config: BackendConfig): String =
-        """
-        max_users: ${config.maxUsers}
-        auth_timeout_seconds: ${config.authTimeoutSeconds}
-        compact_mode: ${config.compactMode}
-        animations_enabled: ${config.animationsEnabled}
-        background_opacity: ${"%.2f".format(config.backgroundOpacity)}
-        show_player_heads: ${config.showPlayerHeads}
-        confirm_dangerous_actions: ${config.confirmDangerousActions}
-        console_history_limit: ${config.consoleHistoryLimit}
-        """.trimIndent() + "\n"
+        buildString {
+            appendLine("max_users: ${config.maxUsers}")
+            appendLine("auth_timeout_seconds: ${config.authTimeoutSeconds}")
+            appendLine("compact_mode: ${config.compactMode}")
+            appendLine("animations_enabled: ${config.animationsEnabled}")
+            appendLine("background_opacity: ${"%.2f".format(Locale.ROOT, config.backgroundOpacity)}")
+            appendLine("show_player_heads: ${config.showPlayerHeads}")
+            appendLine("confirm_dangerous_actions: ${config.confirmDangerousActions}")
+            appendLine("console_history_limit: ${config.consoleHistoryLimit}")
+            appendLine("files:")
+            appendLine("  reserved_free_bytes: ${config.files.reservedFreeBytes}")
+            appendLine("  max_concurrent_transfers: ${config.files.maxConcurrentTransfers}")
+            appendLine("  idle_timeout_seconds: ${config.files.idleTimeoutSeconds}")
+            if (config.files.roots.isEmpty()) {
+                appendLine("  roots: {}")
+            } else {
+                appendLine("  roots:")
+                config.files.roots.forEach { root ->
+                    appendLine("    ${root.id}:")
+                    appendLine("      label: ${root.label}")
+                    appendLine("      path: ${root.path}")
+                    appendLine("      mode: ${root.mode.name.lowercase()}")
+                }
+            }
+        }
+
+    private fun parseFileConfig(lines: List<String>): BackendFileConfig {
+        var reserved = BackendFileConfig.DEFAULT_RESERVED_FREE_BYTES
+        var concurrent = BackendFileConfig.DEFAULT_MAX_CONCURRENT_TRANSFERS
+        var timeout = BackendFileConfig.DEFAULT_IDLE_TIMEOUT_SECONDS
+        val rootValues = linkedMapOf<String, MutableMap<String, String>>()
+        var inFiles = false
+        var inRoots = false
+        var currentRoot: String? = null
+        lines.forEach { raw ->
+            val line = raw.substringBefore('#').trimEnd()
+            if (line.isBlank()) return@forEach
+            val indent = line.indexOfFirst { !it.isWhitespace() }.coerceAtLeast(0)
+            val trimmed = line.trim()
+            when {
+                indent == 0 -> {
+                    inFiles = trimmed == "files:"
+                    inRoots = false
+                    currentRoot = null
+                }
+                inFiles && indent == 2 && trimmed == "roots:" -> {
+                    inRoots = true
+                    currentRoot = null
+                }
+                inFiles && indent == 2 -> {
+                    inRoots = false
+                    val key = trimmed.substringBefore(':')
+                    val value = trimmed.substringAfter(':').trim()
+                    when (key) {
+                        "reserved_free_bytes" -> reserved = value.toLongOrNull()?.coerceAtLeast(0) ?: reserved
+                        "max_concurrent_transfers" -> concurrent = value.toIntOrNull()?.coerceIn(1, 8) ?: concurrent
+                        "idle_timeout_seconds" -> timeout = value.toIntOrNull()?.coerceIn(5, 600) ?: timeout
+                    }
+                }
+                inFiles && inRoots && indent == 4 && trimmed.endsWith(':') -> {
+                    val rootId = trimmed.removeSuffix(":")
+                    currentRoot = rootId
+                    rootValues.getOrPut(rootId) { linkedMapOf() }
+                }
+                inFiles && inRoots && indent >= 6 && currentRoot != null -> {
+                    rootValues[currentRoot]!![trimmed.substringBefore(':')] = trimmed.substringAfter(':').trim()
+                }
+            }
+        }
+        val roots =
+            rootValues.mapNotNull { (id, values) ->
+                val mode =
+                    when (values["mode"]?.lowercase()) {
+                        "read_write" -> BackendFileRootMode.READ_WRITE
+                        "read_only", null -> BackendFileRootMode.READ_ONLY
+                        else -> return@mapNotNull null
+                    }
+                runCatching {
+                    BackendFileRoot(id, values["label"] ?: id, values["path"].orEmpty(), mode)
+                }.getOrNull()
+            }
+        return BackendFileConfig(roots, reserved, concurrent, timeout)
+    }
 
     private fun parse(lines: List<String>): Map<String, String> =
         lines
@@ -148,6 +226,11 @@ class FabricVenusConfig(
         show_player_heads: ${BackendConfig.DEFAULT_SHOW_PLAYER_HEADS}
         confirm_dangerous_actions: ${BackendConfig.DEFAULT_CONFIRM_DANGEROUS_ACTIONS}
         console_history_limit: ${BackendConfig.DEFAULT_CONSOLE_HISTORY_LIMIT}
+        files:
+          reserved_free_bytes: ${BackendFileConfig.DEFAULT_RESERVED_FREE_BYTES}
+          max_concurrent_transfers: ${BackendFileConfig.DEFAULT_MAX_CONCURRENT_TRANSFERS}
+          idle_timeout_seconds: ${BackendFileConfig.DEFAULT_IDLE_TIMEOUT_SECONDS}
+          roots:
         """.trimIndent() + "\n"
 
     companion object {

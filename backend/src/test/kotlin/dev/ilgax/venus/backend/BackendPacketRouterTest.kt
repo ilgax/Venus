@@ -30,6 +30,11 @@ class BackendPacketRouterTest {
         assertEquals(BackendCommandRoute.PLAYER_LIST_GET, BackendCommandRoute.fromPacketType("player_list_get"))
         assertEquals(BackendCommandRoute.PLAYER_DETAIL_GET, BackendCommandRoute.fromPacketType("player_detail_get"))
         assertEquals(BackendCommandRoute.PLAYER_ACTION, BackendCommandRoute.fromPacketType("player_action"))
+        assertEquals(BackendCommandRoute.FILE_ROOTS_GET, BackendCommandRoute.fromPacketType("file_roots_get"))
+        assertEquals(BackendCommandRoute.FILE_LIST_GET, BackendCommandRoute.fromPacketType("file_list_get"))
+        assertEquals(BackendCommandRoute.FILE_ACTION, BackendCommandRoute.fromPacketType("file_action"))
+        assertEquals(BackendCommandRoute.FILE_UPLOAD_START, BackendCommandRoute.fromPacketType("file_upload_start"))
+        assertEquals(BackendCommandRoute.FILE_DOWNLOAD_START, BackendCommandRoute.fromPacketType("file_download_start"))
     }
 
     @Test
@@ -161,7 +166,7 @@ class BackendPacketRouterTest {
             stats = stats,
             log = log,
             players = players,
-            router = BackendPacketRouter(platform, json, console, stats, log, players, sessionManager),
+            router = BackendPacketRouter(platform, json, console, stats, log, players, mockk(relaxed = true), sessionManager),
         )
     }
 

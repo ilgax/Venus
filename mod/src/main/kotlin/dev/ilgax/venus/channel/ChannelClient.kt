@@ -8,6 +8,7 @@ import dev.ilgax.venus.network.ClientKeyPayload
 import dev.ilgax.venus.network.CmdPayload
 import dev.ilgax.venus.network.ErrorPayload
 import dev.ilgax.venus.network.HelloPayload
+import dev.ilgax.venus.network.TransferPayload
 import dev.ilgax.venus.network.VenusPayloads
 import dev.ilgax.venus.network.VenusRawAuthPayload
 import dev.ilgax.venus.network.VenusRawDataPayload
@@ -19,11 +20,17 @@ import dev.ilgax.venus.protocol.ClientKeyPacket
 import dev.ilgax.venus.protocol.ConsoleCmdPacket
 import dev.ilgax.venus.protocol.ConsoleLogSubscribePacket
 import dev.ilgax.venus.protocol.ErrorPacket
+import dev.ilgax.venus.protocol.FileActionPacket
+import dev.ilgax.venus.protocol.FileDownloadStartPacket
+import dev.ilgax.venus.protocol.FileListGetPacket
+import dev.ilgax.venus.protocol.FileRootsGetPacket
+import dev.ilgax.venus.protocol.FileUploadStartPacket
 import dev.ilgax.venus.protocol.PlayerActionPacket
 import dev.ilgax.venus.protocol.PlayerDetailGetPacket
 import dev.ilgax.venus.protocol.PlayerListGetPacket
 import dev.ilgax.venus.protocol.ServerKeyPacket
 import dev.ilgax.venus.state.SessionState
+import dev.ilgax.venus.transfer.ClientFileTransferManager
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
@@ -39,6 +46,8 @@ class ChannelClient(
     private val log: (String) -> Unit,
     private val showAuthFailure: (String) -> Unit = {},
 ) {
+    val fileTransfers = ClientFileTransferManager(json, ::sendTransfer, log)
+
     fun register(packetHandler: PacketHandler) {
         VenusPayloads.registerPayloadTypes()
 
@@ -57,6 +66,9 @@ class ChannelClient(
         ClientPlayNetworking.registerGlobalReceiver(ErrorPayload.TYPE) { payload, _ ->
             packetHandler.handleError(payload.data)
         }
+        ClientPlayNetworking.registerGlobalReceiver(TransferPayload.TYPE) { payload, _ ->
+            fileTransfers.handle(payload.data)
+        }
     }
 
     fun sendHello() {
@@ -67,6 +79,124 @@ class ChannelClient(
 
     fun sendCommand(data: String) {
         ClientPlayNetworking.send(CmdPayload(data))
+    }
+
+    private fun sendTransfer(data: String) {
+        ClientPlayNetworking.send(TransferPayload(data))
+    }
+
+    fun requestFileRoots(): String {
+        val requestId = UUID.randomUUID().toString()
+        sendCommand(json.encodeToString(FileRootsGetPacket.serializer(), FileRootsGetPacket("file_roots_get", requestId)))
+        return requestId
+    }
+
+    fun requestFileList(
+        rootId: String,
+        path: String,
+        offset: Int = 0,
+    ): String {
+        val requestId = UUID.randomUUID().toString()
+        sendCommand(
+            json.encodeToString(
+                FileListGetPacket.serializer(),
+                FileListGetPacket("file_list_get", requestId, rootId, path, offset),
+            ),
+        )
+        return requestId
+    }
+
+    fun sendFileAction(
+        rootId: String,
+        action: String,
+        path: String,
+        destination: String? = null,
+        overwrite: Boolean = false,
+    ): String {
+        val requestId = UUID.randomUUID().toString()
+        sendCommand(
+            json.encodeToString(
+                FileActionPacket.serializer(),
+                FileActionPacket("file_action", requestId, rootId, action, path, destination, overwrite),
+            ),
+        )
+        return requestId
+    }
+
+    fun uploadFile(
+        localSource: String,
+        rootId: String,
+        destination: String,
+        overwrite: Boolean = false,
+        expectedSha256: String? = null,
+    ): String {
+        val requestId = UUID.randomUUID().toString()
+        val size = fileTransfers.prepareUpload(requestId, localSource, destination)
+        sendCommand(
+            json.encodeToString(
+                FileUploadStartPacket.serializer(),
+                FileUploadStartPacket("file_upload_start", requestId, rootId, destination, size, overwrite, expectedSha256),
+            ),
+        )
+        return requestId
+    }
+
+    fun downloadFile(
+        rootId: String,
+        source: String,
+        localDestination: String,
+        overwrite: Boolean = false,
+    ): String {
+        val requestId = UUID.randomUUID().toString()
+        fileTransfers.prepareDownload(requestId, localDestination, source, overwrite)
+        sendCommand(
+            json.encodeToString(
+                FileDownloadStartPacket.serializer(),
+                FileDownloadStartPacket("file_download_start", requestId, rootId, source),
+            ),
+        )
+        return requestId
+    }
+
+    fun openFileEditor(
+        rootId: String,
+        source: String,
+    ): String {
+        val requestId = UUID.randomUUID().toString()
+        fileTransfers.prepareEditorDownload(requestId, rootId, source)
+        sendCommand(
+            json.encodeToString(
+                FileDownloadStartPacket.serializer(),
+                FileDownloadStartPacket("file_download_start", requestId, rootId, source),
+            ),
+        )
+        return requestId
+    }
+
+    fun saveEditedFile(
+        rootId: String,
+        destination: String,
+        content: String,
+        expectedSha256: String,
+        force: Boolean = false,
+    ): String {
+        val requestId = UUID.randomUUID().toString()
+        val size = fileTransfers.prepareEditorUpload(requestId, content, destination)
+        sendCommand(
+            json.encodeToString(
+                FileUploadStartPacket.serializer(),
+                FileUploadStartPacket(
+                    "file_upload_start",
+                    requestId,
+                    rootId,
+                    destination,
+                    size,
+                    overwrite = true,
+                    expectedSha256 = if (force) null else expectedSha256,
+                ),
+            ),
+        )
+        return requestId
     }
 
     fun sendConsoleCommand(command: String) {

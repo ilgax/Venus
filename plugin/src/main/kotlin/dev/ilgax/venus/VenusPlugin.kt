@@ -46,6 +46,7 @@ class VenusPlugin :
                 sendReadyPacket = { player, data -> sendPayloadToPlayer(player, VenusChannels.READY, data) },
                 sendErrorPacket = { player, data -> sendPayloadToPlayer(player, VenusChannels.ERROR, data) },
                 sendDataPacket = sendData,
+                sendTransferPacket = { player, data -> sendPayloadToPlayer(player, VenusChannels.TRANSFER, data) },
             )
         runtime = BackendRuntime.create(platform, json, keyManager)
         val rt = runtime!!
@@ -53,7 +54,7 @@ class VenusPlugin :
         channelListener = ChannelListener(rt.channelHandler)
         logHandler!!.start()
 
-        registerCommand("venus", VenusCommand(this, rt.approvals))
+        registerCommand("venus", VenusCommand(this, rt.approvals, rt.files))
         server.pluginManager.registerEvents(this, this)
 
         BackendIncomingChannel.entries.forEach { channel ->

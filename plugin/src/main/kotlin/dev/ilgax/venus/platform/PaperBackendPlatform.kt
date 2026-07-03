@@ -28,6 +28,7 @@ import org.bukkit.attribute.Attribute
 import org.bukkit.ban.ProfileBanList
 import org.bukkit.entity.Player
 import org.bukkit.plugin.java.JavaPlugin
+import java.nio.file.Path
 import java.util.Date
 import java.util.UUID
 
@@ -38,7 +39,14 @@ class PaperBackendPlatform(
     private val sendReadyPacket: (Player, String) -> Unit = { _, _ -> },
     private val sendErrorPacket: (Player, String) -> Unit = { _, _ -> },
     private val sendDataPacket: (Player, String) -> Unit = { _, _ -> },
+    private val sendTransferPacket: (Player, String) -> Unit = { _, _ -> },
 ) : BackendPlatform {
+    override val serverDirectory: Path
+        get() =
+            plugin.server.worldContainer
+                .toPath()
+                .toAbsolutePath()
+                .normalize()
     override val logger: BackendLogger =
         object : BackendLogger {
             override fun info(message: String) {
@@ -75,6 +83,7 @@ class PaperBackendPlatform(
             BackendConfig(
                 maxUsers = VenusConfig.maxUsers,
                 authTimeoutSeconds = VenusConfig.authTimeoutSeconds,
+                files = VenusConfig.files,
             )
 
     private val players = PaperBackendPlayers(plugin)
@@ -116,6 +125,13 @@ class PaperBackendPlatform(
         plugin.server.getPlayer(player.uuid)?.let { sendDataPacket(it, data) }
     }
 
+    override fun sendTransfer(
+        player: BackendPlayer,
+        data: String,
+    ) {
+        plugin.server.getPlayer(player.uuid)?.let { sendTransferPacket(it, data) }
+    }
+
     override fun executeCommand(
         player: BackendPlayer,
         command: String,
@@ -128,7 +144,9 @@ class PaperBackendPlatform(
         return plugin.server.dispatchCommand(sender, command)
     }
 
-    override fun buildStatsJson(requestedStats: List<String>): String = StatsCollector.buildStatsJson(plugin.server, requestedStats)
+    override fun buildStatsJson(requestedStats: List<String>): String =
+        StatsCollector
+            .buildStatsJson(plugin.server, requestedStats)
 
     override fun players(): BackendPlayers = players
 }

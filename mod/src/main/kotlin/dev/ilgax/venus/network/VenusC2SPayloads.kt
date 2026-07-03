@@ -14,11 +14,13 @@ object VenusPayloads {
         PayloadTypeRegistry.playC2S().register(AuthResponsePayload.TYPE, AuthResponsePayload.CODEC)
         PayloadTypeRegistry.playC2S().register(ErrorPayload.TYPE, ErrorPayload.CODEC)
         PayloadTypeRegistry.playC2S().register(CmdPayload.TYPE, CmdPayload.CODEC)
+        PayloadTypeRegistry.playC2S().register(TransferPayload.TYPE, TransferPayload.CODEC)
         PayloadTypeRegistry.playS2C().register(ErrorPayload.TYPE, ErrorPayload.CODEC)
         PayloadTypeRegistry.playS2C().register(VenusRawPayload.TYPE, VenusRawPayload.CODEC)
         PayloadTypeRegistry.playS2C().register(VenusRawAuthPayload.TYPE, VenusRawAuthPayload.CODEC)
         PayloadTypeRegistry.playS2C().register(VenusRawReadyPayload.TYPE, VenusRawReadyPayload.CODEC)
         PayloadTypeRegistry.playS2C().register(VenusRawDataPayload.TYPE, VenusRawDataPayload.CODEC)
+        PayloadTypeRegistry.playS2C().register(TransferPayload.TYPE, TransferPayload.CODEC)
     }
 }
 
@@ -87,6 +89,17 @@ data class CmdPayload(
     }
 
     override fun type(): CustomPacketPayload.Type<CmdPayload> = TYPE
+}
+
+data class TransferPayload(
+    val data: String,
+) : CustomPacketPayload {
+    companion object {
+        val TYPE = CustomPacketPayload.Type<TransferPayload>(channelId(VenusChannels.TRANSFER))
+        val CODEC: StreamCodec<FriendlyByteBuf, TransferPayload> = textCodec(::TransferPayload) { it.data }
+    }
+
+    override fun type(): CustomPacketPayload.Type<TransferPayload> = TYPE
 }
 
 private fun <T : CustomPacketPayload> textCodec(

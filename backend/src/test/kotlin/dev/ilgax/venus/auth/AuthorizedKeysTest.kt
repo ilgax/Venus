@@ -6,6 +6,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -141,6 +142,26 @@ class AuthorizedKeysTest {
     fun `removeByFingerprint returns false for unknown fingerprint`() {
         AuthorizedKeys.authorize(genKeyB64(), "Someone")
         assertFalse(AuthorizedKeys.removeByFingerprint("SHA256:nonexistent=="))
+    }
+
+    @Test
+    fun `V26 failed persistence leaves authorized key in memory`() {
+        val key = genKeyB64()
+        AuthorizedKeys.authorize(key, "Stable")
+        tempDir.resolve("keys").resolve("authorized_keys.txt.tmp").mkdir()
+
+        assertFailsWith<Exception> { AuthorizedKeys.remove(key) }
+
+        assertTrue(AuthorizedKeys.isAuthorized(key))
+    }
+
+    @Test
+    fun `V26 failed persistence does not authorize key in memory`() {
+        tempDir.resolve("keys").resolve("authorized_keys.txt.tmp").mkdir()
+
+        assertFailsWith<Exception> { AuthorizedKeys.authorize("new-key", "Rejected") }
+
+        assertFalse(AuthorizedKeys.isAuthorized("new-key"))
     }
 
     @Test

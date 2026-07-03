@@ -34,7 +34,14 @@ class VenusMod : ClientModInitializer {
         val config = FabricVenusConfig(venusFolder, LoggerFactory.getLogger("Venus-Config"))
         config.load()
         channelClient = ChannelClient(json, keyManager, log, AuthToasts::failure)
-        val packetHandler = PacketHandler(json, channelClient::sendCommand, log, AuthToasts::success, AuthToasts::failure)
+        val packetHandler =
+            PacketHandler(
+                json = json,
+                sendCommand = channelClient::sendCommand,
+                log = log,
+                showAuthSuccess = AuthToasts::success,
+                showAuthFailure = AuthToasts::failure,
+            ).attachFileTransfers(channelClient.fileTransfers)
         channelClient.register(packetHandler)
         PanelKeybind.register(channelClient, config)
 
@@ -79,6 +86,7 @@ class VenusMod : ClientModInitializer {
         }
 
         ClientPlayConnectionEvents.DISCONNECT.register { _, _ ->
+            channelClient.fileTransfers.reset()
             SessionState.reset()
         }
     }

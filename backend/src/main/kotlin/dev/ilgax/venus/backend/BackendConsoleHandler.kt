@@ -29,16 +29,51 @@ class BackendConsoleHandler(
         val executionLog = "${player.name} executed console command: ${LogSanitizer.redactCommand(packet.command)}"
         suppressOwnExecutionLog(player, executionLog)
         platform.logger.info(executionLog)
-        val lines = mutableListOf<String>()
-        val dispatched = platform.executeCommand(player, packet.command) { lines.add(it) }
+        val lines = ArrayDeque<String>()
+        val dispatched = platform.executeCommand(player, packet.command) { appendBoundedLine(packet.command, lines, it) }
         if (!dispatched && lines.isEmpty()) {
-            lines.add("Unknown command.")
+            appendBoundedLine(packet.command, lines, "Unknown command.")
         }
         val response =
             json.encodeToString(
                 CmdResponsePacket.serializer(),
-                CmdResponsePacket(type = "cmd_response", command = packet.command, lines = lines.takeLast(MAX_LINES_PER_PACKET)),
+                CmdResponsePacket(type = "cmd_response", command = packet.command, lines = lines.toList()),
             )
         platform.sendData(player, response)
+    }
+
+    private fun appendBoundedLine(
+        command: String,
+        lines: ArrayDeque<String>,
+        line: String,
+    ) {
+        lines.addLast(line)
+        while (lines.size > MAX_LINES_PER_PACKET) lines.removeFirst()
+        while (!fitsPacket(command, lines) && lines.size > 1) lines.removeFirst()
+        if (!fitsPacket(command, lines)) {
+            lines[lines.lastIndex] = fitSingleLine(command, lines.last())
+        }
+    }
+
+    private fun fitsPacket(
+        command: String,
+        lines: Collection<String>,
+    ): Boolean = runCatching { CmdResponsePacket("cmd_response", command, lines.toList()) }.isSuccess
+
+    private fun fitSingleLine(
+        command: String,
+        line: String,
+    ): String {
+        var low = 0
+        var high = line.length
+        while (low < high) {
+            val middle = (low + high + 1) / 2
+            if (fitsPacket(command, listOf(line.take(middle)))) {
+                low = middle
+            } else {
+                high = middle - 1
+            }
+        }
+        return line.take(low)
     }
 }

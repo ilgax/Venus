@@ -9,7 +9,6 @@ import io.mockk.verify
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
 
 class BackendChannelHandlerTest {
     private val player = BackendPlayer(UUID.randomUUID(), "TestPlayer")
@@ -21,11 +20,7 @@ class BackendChannelHandlerTest {
         assertEquals(BackendIncomingChannel.AUTH, BackendIncomingChannel.fromChannel(VenusChannels.AUTH))
         assertEquals(BackendIncomingChannel.ERROR, BackendIncomingChannel.fromChannel(VenusChannels.ERROR))
         assertEquals(BackendIncomingChannel.CMD, BackendIncomingChannel.fromChannel(VenusChannels.CMD))
-    }
-
-    @Test
-    fun `unknown inbound channel is ignored`() {
-        assertNull(BackendIncomingChannel.fromChannel("venus:transfer"))
+        assertEquals(BackendIncomingChannel.TRANSFER, BackendIncomingChannel.fromChannel(VenusChannels.TRANSFER))
     }
 
     @Test
@@ -84,7 +79,7 @@ class BackendChannelHandlerTest {
         return HandlerFixture(
             auth = auth,
             router = router,
-            handler = BackendChannelHandler(auth, router, sessionManager, logger),
+            handler = BackendChannelHandler(auth, router, mockk(relaxed = true), sessionManager, logger),
         )
     }
 

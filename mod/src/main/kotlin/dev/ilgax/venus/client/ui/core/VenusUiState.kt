@@ -69,6 +69,7 @@ enum class VenusPage(
 ) {
     DASHBOARD("dashboard"),
     PLAYERS("players"),
+    FILES("files"),
     CONSOLE("console"),
     AUTH("auth"),
     SETTINGS("settings"),

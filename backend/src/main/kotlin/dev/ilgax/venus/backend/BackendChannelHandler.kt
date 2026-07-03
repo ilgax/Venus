@@ -17,6 +17,7 @@ enum class BackendIncomingChannel(
     AUTH(VenusChannels.AUTH),
     ERROR(VenusChannels.ERROR),
     CMD(VenusChannels.CMD),
+    TRANSFER(VenusChannels.TRANSFER),
     ;
 
     companion object {
@@ -27,6 +28,7 @@ enum class BackendIncomingChannel(
 class BackendChannelHandler(
     private val authHandler: BackendAuthHandler,
     private val packetRouter: BackendPacketRouter,
+    private val filesHandler: BackendFilesHandler,
     private val sessionManager: SessionManager,
     private val logger: BackendLogger,
 ) {
@@ -90,6 +92,7 @@ class BackendChannelHandler(
                 BackendIncomingChannel.AUTH -> authHandler.handleAuthResponse(player, data)
                 BackendIncomingChannel.ERROR -> authHandler.handleClientError(player, data)
                 BackendIncomingChannel.CMD -> packetRouter.handleCommand(player, data)
+                BackendIncomingChannel.TRANSFER -> filesHandler.handleTransfer(player, data)
             }
         } catch (e: Throwable) {
             logger.warning("Unexpected error handling packet on $channel from ${player.name}: ${e.message}")

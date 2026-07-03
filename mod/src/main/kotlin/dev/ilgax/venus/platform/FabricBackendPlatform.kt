@@ -8,6 +8,7 @@ import dev.ilgax.venus.backend.BackendPlayers
 import dev.ilgax.venus.backend.BackendScheduler
 import dev.ilgax.venus.backend.BackendTask
 import dev.ilgax.venus.network.ErrorPayload
+import dev.ilgax.venus.network.TransferPayload
 import dev.ilgax.venus.network.VenusRawAuthPayload
 import dev.ilgax.venus.network.VenusRawDataPayload
 import dev.ilgax.venus.network.VenusRawPayload
@@ -25,6 +26,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking
+import net.fabricmc.loader.api.FabricLoader
 import net.minecraft.network.chat.Component
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload
 import net.minecraft.server.MinecraftServer
@@ -36,6 +38,7 @@ import net.minecraft.server.players.UserWhiteListEntry
 import net.minecraft.world.level.GameType
 import org.slf4j.Logger
 import java.io.IOException
+import java.nio.file.Path
 import java.util.Date
 import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
@@ -45,6 +48,12 @@ class FabricBackendPlatform(
     private val loggerDelegate: Logger,
     private val configProvider: () -> BackendConfig,
 ) : BackendPlatform {
+    override val serverDirectory: Path =
+        FabricLoader
+            .getInstance()
+            .gameDir
+            .toAbsolutePath()
+            .normalize()
     override val logger: BackendLogger =
         object : BackendLogger {
             override fun info(message: String) {
@@ -93,6 +102,11 @@ class FabricBackendPlatform(
         player: BackendPlayer,
         data: String,
     ) = send(player, VenusRawDataPayload(data.toByteArray(Charsets.UTF_8)))
+
+    override fun sendTransfer(
+        player: BackendPlayer,
+        data: String,
+    ) = send(player, TransferPayload(data))
 
     override fun executeCommand(
         player: BackendPlayer,
@@ -261,13 +275,11 @@ private class FabricBackendPlayers(
                     level = onlineTarget?.experienceLevel,
                     experienceProgress = onlineTarget?.experienceProgress,
                     world =
-                        onlineTarget?.let { target ->
-                            target
-                                .level()
-                                .dimension()
-                                .identifier()
-                                .toString()
-                        },
+                        onlineTarget
+                            ?.level()
+                            ?.dimension()
+                            ?.identifier()
+                            ?.toString(),
                     x = onlineTarget?.x,
                     y = onlineTarget?.y,
                     z = onlineTarget?.z,

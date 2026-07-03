@@ -207,14 +207,18 @@ class ConsolePage(
                 val lineBounds = Bounds(bounds.x + 2, y, bounds.width - 4, lineH)
                 val selected = selectedStart != null && i in selectionRange()
                 VenusConsoleLine(
-                    lineBounds,
-                    parsed.timestamp,
-                    parsed.level,
-                    parsed.text,
-                    parsed.logger,
-                    parsed.message,
-                    simpleLogger,
-                ).render(g, font, selected)
+                    bounds = lineBounds,
+                    timestamp = parsed.timestamp,
+                    level = parsed.level,
+                    text = parsed.text,
+                    logger = parsed.logger,
+                    message = parsed.message,
+                    simpleLogger = simpleLogger,
+                ).render(
+                    g,
+                    font,
+                    selected,
+                )
             }
         }
 

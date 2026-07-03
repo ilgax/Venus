@@ -17,6 +17,7 @@ import java.util.logging.Logger
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
 
 class VenusCommandTest {
     private lateinit var plugin: VenusPlugin
@@ -38,7 +39,7 @@ class VenusCommandTest {
         every { consoleSender.sendMessage(any<String>()) } returns Unit
         every { playerSender.sendMessage(any<String>()) } returns Unit
 
-        command = VenusCommand(plugin, approvals)
+        command = VenusCommand(plugin, approvals, mockk(relaxed = true))
 
         mockkObject(VenusConfig)
         mockkObject(AuthorizedKeys)
@@ -54,6 +55,11 @@ class VenusCommandTest {
         every { stack.sender } returns consoleSender
         command.execute(stack, emptyArray())
         verify { consoleSender.sendMessage(match<String> { it.contains("Usage:") }) }
+    }
+
+    @Test
+    fun `V30 command leaves permission checks to subcommands`() {
+        assertEquals(false, command.javaClass.declaredMethods.any { it.name == "permission" })
     }
 
     @Test

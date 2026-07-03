@@ -1,9 +1,12 @@
 package dev.ilgax.venus.backend
 
+import dev.ilgax.venus.protocol.CmdResponsePacket
+import dev.ilgax.venus.protocol.MAX_PACKET_SIZE
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
 import io.mockk.runs
+import io.mockk.slot
 import io.mockk.verify
 import kotlinx.serialization.json.Json
 import java.util.UUID
@@ -43,6 +46,26 @@ class BackendConsoleHandlerTest {
 
         verify { platform.executeCommand(player, "say hi", any()) }
         verify { platform.sendData(player, match<String> { it.contains("Line 1") && it.contains("Line 2") }) }
+    }
+
+    @Test
+    fun `V28 large command output is bounded to a valid response packet`() {
+        val (platform, _) = platformFixture()
+        val handler = BackendConsoleHandler(platform, json)
+        val player = BackendPlayer(UUID.randomUUID(), "TestPlayer")
+        val sent = slot<String>()
+        every { platform.sendData(player, capture(sent)) } just runs
+        every { platform.executeCommand(player, "large", any()) } answers {
+            val output = thirdArg<(String) -> Unit>()
+            repeat(200) { output("x".repeat(MAX_PACKET_SIZE)) }
+            true
+        }
+
+        handler.handle(player, """{"type":"console_cmd","command":"large"}""")
+
+        val response = json.decodeFromString(CmdResponsePacket.serializer(), sent.captured)
+        assertTrue(response.lines.isNotEmpty())
+        assertTrue(sent.captured.toByteArray(Charsets.UTF_8).size <= MAX_PACKET_SIZE)
     }
 
     @Test

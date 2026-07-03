@@ -10,17 +10,20 @@ class BackendRuntime private constructor(
     val logHandler: BackendLogHandler,
     val statSubscriptions: BackendStatSubscriptionManager,
     val approvals: BackendApprovalService,
+    val files: BackendFilesHandler,
     private val sessionManager: SessionManager,
 ) {
     fun onPlayerQuit(player: BackendPlayer) {
         authHandler.onPlayerQuit(player)
         logHandler.unsubscribe(player.uuid)
         channelHandler.cleanupPlayer(player.uuid)
+        files.cleanupPlayer(player.uuid)
     }
 
     fun shutdown() {
         authHandler.cancelAllTimeouts()
         statSubscriptions.cancelAll()
+        files.shutdown()
         sessionManager.clearAll()
     }
 
@@ -41,6 +44,7 @@ class BackendRuntime private constructor(
                     statSubscriptions,
                     sessionManager,
                 )
+            val filesHandler = BackendFilesHandler(platform, json, sessionManager)
             val packetRouter =
                 BackendPacketRouter(
                     platform,
@@ -51,18 +55,21 @@ class BackendRuntime private constructor(
                     BackendStatsHandler(platform, json, statSubscriptions),
                     logHandler,
                     BackendPlayersHandler(platform, json),
+                    filesHandler,
                     sessionManager,
                 )
             return BackendRuntime(
                 authHandler = authHandler,
-                channelHandler = BackendChannelHandler(authHandler, packetRouter, sessionManager, platform.logger),
+                channelHandler = BackendChannelHandler(authHandler, packetRouter, filesHandler, sessionManager, platform.logger),
                 logHandler = logHandler,
                 statSubscriptions = statSubscriptions,
                 approvals =
                     BackendApprovalService(platform, authHandler, sessionManager) { uuid ->
                         statSubscriptions.cancel(uuid)
                         logHandler.unsubscribe(uuid)
+                        filesHandler.cleanupPlayer(uuid)
                     },
+                files = filesHandler,
                 sessionManager = sessionManager,
             )
         }

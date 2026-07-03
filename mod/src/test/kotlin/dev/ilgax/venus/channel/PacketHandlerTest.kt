@@ -3,6 +3,8 @@ package dev.ilgax.venus.channel
 import dev.ilgax.venus.protocol.CmdResponsePacket
 import dev.ilgax.venus.protocol.ConsoleLogPacket
 import dev.ilgax.venus.protocol.ErrorPacket
+import dev.ilgax.venus.protocol.FileRootPacket
+import dev.ilgax.venus.protocol.FileRootsPacket
 import dev.ilgax.venus.protocol.PlayerActionResultPacket
 import dev.ilgax.venus.protocol.PlayerDetail
 import dev.ilgax.venus.protocol.PlayerDetailPacket
@@ -187,6 +189,17 @@ class PacketHandlerTest {
 
         assertEquals(listOf("Server denied access."), failures)
         assertFalse(SessionState.sessionActive)
+    }
+
+    @Test
+    fun `file roots packet updates file state`() {
+        val handler = PacketHandler(json, {}) {}
+        SessionState.markActive()
+        val roots = FileRootsPacket("file_roots", "request", listOf(FileRootPacket("config", "Config", true)))
+
+        handler.handleData(json.encodeToString(FileRootsPacket.serializer(), roots))
+
+        assertEquals(roots, SessionState.latestFileRoots)
     }
 
     @Test

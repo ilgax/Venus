@@ -15,6 +15,11 @@ enum class BackendCommandRoute(
     PLAYER_LIST_GET("player_list_get"),
     PLAYER_DETAIL_GET("player_detail_get"),
     PLAYER_ACTION("player_action"),
+    FILE_ROOTS_GET("file_roots_get"),
+    FILE_LIST_GET("file_list_get"),
+    FILE_ACTION("file_action"),
+    FILE_UPLOAD_START("file_upload_start"),
+    FILE_DOWNLOAD_START("file_download_start"),
     ;
 
     companion object {
@@ -29,6 +34,7 @@ class BackendPacketRouter(
     private val statsHandler: BackendStatsHandler,
     private val logHandler: BackendLogHandler,
     private val playersHandler: BackendPlayersHandler,
+    private val filesHandler: BackendFilesHandler,
     private val sessionManager: SessionManager,
 ) {
     fun handleCommand(
@@ -67,6 +73,11 @@ class BackendPacketRouter(
                 BackendCommandRoute.PLAYER_LIST_GET -> playersHandler.handleListGet(player, data)
                 BackendCommandRoute.PLAYER_DETAIL_GET -> playersHandler.handleDetailGet(player, data)
                 BackendCommandRoute.PLAYER_ACTION -> playersHandler.handleAction(player, data)
+                BackendCommandRoute.FILE_ROOTS_GET -> filesHandler.handleRoots(player, data)
+                BackendCommandRoute.FILE_LIST_GET -> filesHandler.handleList(player, data)
+                BackendCommandRoute.FILE_ACTION -> filesHandler.handleAction(player, data)
+                BackendCommandRoute.FILE_UPLOAD_START -> filesHandler.handleUploadStart(player, data)
+                BackendCommandRoute.FILE_DOWNLOAD_START -> filesHandler.handleDownloadStart(player, data)
                 null -> platform.logger.warning("${player.name} sent unknown cmd packet type: $type")
             }
         } catch (e: Throwable) {

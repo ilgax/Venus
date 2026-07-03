@@ -70,6 +70,8 @@ class SessionStateTest {
         )
         SessionState.addCommandResponse(CmdResponsePacket("cmd_response", "say hi", listOf("hi")))
         SessionState.setServerInfo("play.venustest.com", "My Server")
+        SessionState.openFileEditor(FileEditorState("root", "server.properties", "motd=Venus", "hash"))
+        SessionState.updateFileTransfer(FileTransferView("transfer", "download", "server.properties", 1, 2, 1, "running"))
 
         SessionState.reset()
 
@@ -81,6 +83,8 @@ class SessionStateTest {
         assertNull(SessionState.latestPlayerList)
         assertNull(SessionState.latestPlayerDetail)
         assertNull(SessionState.latestPlayerActionResult)
+        assertNull(SessionState.fileEditor)
+        assertTrue(SessionState.activeFileTransfers.isEmpty())
     }
 
     @Test

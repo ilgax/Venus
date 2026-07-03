@@ -4,3 +4,16 @@ max_users: 1
 
 # auth_timeout_seconds: timeout for pending approval requests and auth challenges
 auth_timeout_seconds: 60
+
+# File access is disabled until at least one named root is configured.
+files:
+  reserved_free_bytes: 1073741824
+  max_concurrent_transfers: 2
+  idle_timeout_seconds: 30
+  roots: {}
+  # Example:
+  # roots:
+  #   configs:
+  #     label: Server Config
+  #     path: config
+  #     mode: read_write

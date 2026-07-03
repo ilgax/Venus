@@ -73,6 +73,16 @@ object PanelKeybind {
                         }
                     },
                     subscribeStats = channelClient::sendStatSubscribe,
+                    requestFileRoots = channelClient::requestFileRoots,
+                    requestFileList = channelClient::requestFileList,
+                    sendFileAction = channelClient::sendFileAction,
+                    uploadFile = { local, root, destination, overwrite ->
+                        channelClient.uploadFile(local, root, destination, overwrite)
+                    },
+                    downloadFile = channelClient::downloadFile,
+                    openFileEditor = channelClient::openFileEditor,
+                    saveEditedFile = channelClient::saveEditedFile,
+                    cancelFileTransfer = channelClient.fileTransfers::cancel,
                     onSaveSettings = { settings ->
                         config.save(
                             config.backendConfig.copy(

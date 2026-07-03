@@ -17,6 +17,8 @@ class BackendConfigTest {
         assertEquals(true, config.showPlayerHeads)
         assertEquals(true, config.confirmDangerousActions)
         assertEquals(500, config.consoleHistoryLimit)
+        assertEquals(emptyList(), config.files.roots)
+        assertEquals(1_073_741_824L, config.files.reservedFreeBytes)
     }
 
     @Test

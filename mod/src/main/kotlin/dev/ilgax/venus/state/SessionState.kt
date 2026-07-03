@@ -1,6 +1,9 @@
 package dev.ilgax.venus.state
 
 import dev.ilgax.venus.protocol.CmdResponsePacket
+import dev.ilgax.venus.protocol.FileActionResultPacket
+import dev.ilgax.venus.protocol.FileListPacket
+import dev.ilgax.venus.protocol.FileRootsPacket
 import dev.ilgax.venus.protocol.PlayerActionResultPacket
 import dev.ilgax.venus.protocol.PlayerDetail
 import dev.ilgax.venus.protocol.PlayerListPacket
@@ -40,6 +43,27 @@ object SessionState {
     @Volatile
     var latestPlayerActionResult: PlayerActionResultPacket? = null
         private set
+
+    @Volatile
+    var latestFileRoots: FileRootsPacket? = null
+        private set
+
+    @Volatile
+    var latestFileList: FileListPacket? = null
+        private set
+
+    @Volatile
+    var latestFileActionResult: FileActionResultPacket? = null
+        private set
+
+    @Volatile
+    var fileEditor: FileEditorState? = null
+        private set
+
+    private val fileTransfers = linkedMapOf<String, FileTransferView>()
+
+    val activeFileTransfers: List<FileTransferView>
+        get() = synchronized(fileTransfers) { fileTransfers.values.toList() }
 
     private val console = mutableListOf<String>()
     private val statHistory = mutableListOf<StatsPacket>()
@@ -98,6 +122,33 @@ object SessionState {
         latestPlayerActionResult = result
     }
 
+    fun updateFileRoots(roots: FileRootsPacket) {
+        latestFileRoots = roots
+    }
+
+    fun updateFileList(list: FileListPacket) {
+        latestFileList = list
+    }
+
+    fun updateFileActionResult(result: FileActionResultPacket) {
+        latestFileActionResult = result
+    }
+
+    fun updateFileTransfer(view: FileTransferView) {
+        synchronized(fileTransfers) {
+            fileTransfers[view.transferId] = view
+            while (fileTransfers.size > MAX_FILE_TRANSFER_HISTORY) fileTransfers.remove(fileTransfers.keys.first())
+        }
+    }
+
+    fun openFileEditor(state: FileEditorState) {
+        fileEditor = state
+    }
+
+    fun closeFileEditor() {
+        fileEditor = null
+    }
+
     fun addCommandResponse(response: CmdResponsePacket) {
         addConsoleLines(listOf("> ${response.command}") + response.lines)
     }
@@ -131,6 +182,11 @@ object SessionState {
         latestPlayerList = null
         latestPlayerDetail = null
         latestPlayerActionResult = null
+        latestFileRoots = null
+        latestFileList = null
+        latestFileActionResult = null
+        fileEditor = null
+        synchronized(fileTransfers) { fileTransfers.clear() }
         synchronized(console) {
             console.clear()
         }
@@ -141,4 +197,23 @@ object SessionState {
 
     private const val MAX_CONSOLE_LINES = 500
     private const val MAX_STAT_HISTORY = 60
+    private const val MAX_FILE_TRANSFER_HISTORY = 8
 }
+
+data class FileTransferView(
+    val transferId: String,
+    val direction: String,
+    val path: String,
+    val transferredBytes: Long,
+    val totalBytes: Long,
+    val bytesPerSecond: Long,
+    val status: String,
+    val message: String = "",
+)
+
+data class FileEditorState(
+    val rootId: String,
+    val path: String,
+    val content: String,
+    val sha256: String,
+)

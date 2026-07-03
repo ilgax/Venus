@@ -3,6 +3,7 @@ package dev.ilgax.venus.commands
 import dev.ilgax.venus.VenusPlugin
 import dev.ilgax.venus.auth.AuthorizedKeys
 import dev.ilgax.venus.backend.BackendApprovalService
+import dev.ilgax.venus.backend.BackendFilesHandler
 import dev.ilgax.venus.config.VenusConfig
 import io.papermc.paper.command.brigadier.BasicCommand
 import io.papermc.paper.command.brigadier.CommandSourceStack
@@ -11,9 +12,8 @@ import org.bukkit.command.ConsoleCommandSender
 class VenusCommand(
     private val plugin: VenusPlugin,
     private val approvals: BackendApprovalService,
+    private val files: BackendFilesHandler,
 ) : BasicCommand {
-    override fun permission(): String = "venus.admin"
-
     override fun execute(
         stack: CommandSourceStack,
         args: Array<String>,
@@ -43,6 +43,7 @@ class VenusCommand(
                     return
                 }
                 VenusConfig.load(plugin)
+                files.reload()
                 sender.sendMessage("Venus config reloaded.")
                 plugin.logger.info("Venus config reloaded by ${sender.name}.")
             }

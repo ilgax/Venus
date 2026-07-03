@@ -47,8 +47,7 @@ object AuthorizedKeys {
     ) {
         val normalized = publicKeyBase64.trim()
         if (keys.containsKey(normalized)) return
-        keys[normalized] = comment
-        rewriteFile()
+        commit(keys.toMutableMap().apply { this[normalized] = comment })
     }
 
     @Synchronized
@@ -60,17 +59,16 @@ object AuthorizedKeys {
         val normalized = publicKeyBase64.trim()
         if (keys.containsKey(normalized)) return true
         if (keys.size >= maxUsers) return false
-        keys[normalized] = comment
-        rewriteFile()
+        commit(keys.toMutableMap().apply { this[normalized] = comment })
         return true
     }
 
     @Synchronized
     fun remove(publicKeyBase64: String): Boolean {
         val normalized = publicKeyBase64.trim()
-        val removed = keys.remove(normalized) != null
-        if (removed) rewriteFile()
-        return removed
+        if (!keys.containsKey(normalized)) return false
+        commit(keys.toMutableMap().apply { remove(normalized) })
+        return true
     }
 
     @Synchronized
@@ -85,8 +83,7 @@ object AuthorizedKeys {
                 comment = entry.value,
                 fingerprint = computeFingerprint(entry.key),
             )
-        keys.remove(entry.key)
-        rewriteFile()
+        commit(keys.toMutableMap().apply { remove(entry.key) })
         return removed
     }
 
@@ -108,9 +105,15 @@ object AuthorizedKeys {
             "(invalid key)"
         }
 
-    private fun rewriteFile() {
+    private fun commit(updated: Map<String, String>) {
+        rewriteFile(updated)
+        keys.clear()
+        keys.putAll(updated)
+    }
+
+    private fun rewriteFile(updated: Map<String, String>) {
         val content =
-            keys.entries.joinToString("\n") { (base64, comment) ->
+            updated.entries.joinToString("\n") { (base64, comment) ->
                 if (comment.isEmpty()) base64 else "$base64 $comment"
             }
         val tmp = keysFile.toPath().resolveSibling("authorized_keys.txt.tmp")

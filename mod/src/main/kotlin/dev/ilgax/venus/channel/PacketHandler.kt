@@ -3,6 +3,10 @@ package dev.ilgax.venus.channel
 import dev.ilgax.venus.protocol.CmdResponsePacket
 import dev.ilgax.venus.protocol.ConsoleLogPacket
 import dev.ilgax.venus.protocol.ErrorPacket
+import dev.ilgax.venus.protocol.FileActionResultPacket
+import dev.ilgax.venus.protocol.FileListPacket
+import dev.ilgax.venus.protocol.FileRootsPacket
+import dev.ilgax.venus.protocol.FileTransferReadyPacket
 import dev.ilgax.venus.protocol.LogSanitizer
 import dev.ilgax.venus.protocol.PlayerActionResultPacket
 import dev.ilgax.venus.protocol.PlayerDetailPacket
@@ -12,6 +16,7 @@ import dev.ilgax.venus.protocol.StatSubscribePacket
 import dev.ilgax.venus.protocol.StatsPacket
 import dev.ilgax.venus.state.SessionState
 import dev.ilgax.venus.state.SessionState.HandshakeState
+import dev.ilgax.venus.transfer.ClientFileTransferManager
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -23,6 +28,10 @@ class PacketHandler(
     private val showAuthSuccess: () -> Unit = {},
     private val showAuthFailure: (String) -> Unit = {},
 ) {
+    private var fileTransfers: ClientFileTransferManager? = null
+
+    fun attachFileTransfers(manager: ClientFileTransferManager): PacketHandler = apply { fileTransfers = manager }
+
     fun handleReady(data: String) {
         val packet =
             try {
@@ -78,6 +87,10 @@ class PacketHandler(
             "player_action_result" -> handlePlayerActionResult(data)
             "player_list" -> handlePlayerList(data)
             "player_detail" -> handlePlayerDetail(data)
+            "file_roots" -> handleFileRoots(data)
+            "file_list" -> handleFileList(data)
+            "file_action_result" -> handleFileActionResult(data)
+            "file_transfer_ready" -> handleFileTransferReady(data)
             else -> log("Venus: unexpected data packet type: $type")
         }
     }
@@ -164,6 +177,32 @@ class PacketHandler(
                 return
             }
         SessionState.updatePlayerActionResult(packet)
+    }
+
+    private fun handleFileRoots(data: String) {
+        runCatching { json.decodeFromString(FileRootsPacket.serializer(), data) }
+            .onSuccess(SessionState::updateFileRoots)
+            .onFailure { log("Venus: invalid file_roots packet - ${it.message}") }
+    }
+
+    private fun handleFileList(data: String) {
+        runCatching { json.decodeFromString(FileListPacket.serializer(), data) }
+            .onSuccess(SessionState::updateFileList)
+            .onFailure { log("Venus: invalid file_list packet - ${it.message}") }
+    }
+
+    private fun handleFileActionResult(data: String) {
+        runCatching { json.decodeFromString(FileActionResultPacket.serializer(), data) }
+            .onSuccess {
+                fileTransfers?.discardPending(it.requestId)
+                SessionState.updateFileActionResult(it)
+            }.onFailure { log("Venus: invalid file_action_result packet - ${it.message}") }
+    }
+
+    private fun handleFileTransferReady(data: String) {
+        runCatching { json.decodeFromString(FileTransferReadyPacket.serializer(), data) }
+            .onSuccess { fileTransfers?.handleReady(it) }
+            .onFailure { log("Venus: invalid file_transfer_ready packet - ${it.message}") }
     }
 
     private fun authFailureMessage(reason: String): String =

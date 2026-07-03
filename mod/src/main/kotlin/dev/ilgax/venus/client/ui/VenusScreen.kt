@@ -17,6 +17,7 @@ import dev.ilgax.venus.client.ui.core.VenusUiState
 import dev.ilgax.venus.client.ui.page.AuthPage
 import dev.ilgax.venus.client.ui.page.ConsolePage
 import dev.ilgax.venus.client.ui.page.DashboardPage
+import dev.ilgax.venus.client.ui.page.FilesPage
 import dev.ilgax.venus.client.ui.page.PlayersPage
 import dev.ilgax.venus.client.ui.page.SettingsPage
 import dev.ilgax.venus.client.ui.render.VenusDraw
@@ -47,6 +48,14 @@ class VenusScreen(
     private val requestPlayerDetail: (String) -> Unit,
     private val sendPlayerAction: (String, String, Any?) -> String,
     private val subscribeStats: () -> Unit,
+    private val requestFileRoots: () -> String,
+    private val requestFileList: (String, String, Int) -> String,
+    private val sendFileAction: (String, String, String, String?, Boolean) -> String,
+    private val uploadFile: (String, String, String, Boolean) -> String,
+    private val downloadFile: (String, String, String, Boolean) -> String,
+    private val openFileEditor: (String, String) -> String,
+    private val saveEditedFile: (String, String, String, String, Boolean) -> String,
+    private val cancelFileTransfer: (String) -> Unit,
     private val onSaveSettings: (SettingsPage.Settings) -> Unit,
     private val initialSettings: SettingsPage.Settings,
 ) : Screen(Component.translatable("screen.venus.panel")) {
@@ -62,6 +71,7 @@ class VenusScreen(
     private lateinit var dashboardPage: DashboardPage
     private lateinit var playersPage: PlayersPage
     private lateinit var consolePage: ConsolePage
+    private lateinit var filesPage: FilesPage
     private lateinit var authPage: AuthPage
     private lateinit var settingsPage: SettingsPage
     private var currentPage: dev.ilgax.venus.client.ui.page.VenusPageContract? = null
@@ -115,12 +125,26 @@ class VenusScreen(
                     sendPlayerAction,
                 ) { settingsPage.showPlayerHeads }
             consolePage = ConsolePage(sendConsoleCommand, subscribeLogs) { settingsPage.consoleHistoryLimit }
+            filesPage =
+                FilesPage(
+                    requestFileRoots,
+                    requestFileList,
+                    sendFileAction,
+                    uploadFile,
+                    downloadFile,
+                    openFileEditor,
+                    saveEditedFile,
+                    cancelFileTransfer,
+                    { title, message, action, kind -> showConfirm(title, message, action, kind) },
+                    { kind, title, message -> showToast(kind, title, message) },
+                )
             authPage = AuthPage({ id -> }, { id -> }, { id -> })
             settingsPage = SettingsPage(onSaveSettings)
             settingsPage.applySettings(initialSettings)
         }
         playersPage.searchField()?.let { addRenderableWidget(it.editBox()) }
         consolePage.inputField()?.let { addRenderableWidget(it.editBox()) }
+        filesPage.widgets().forEach { addRenderableWidget(it) }
         settingsPage.widgets().forEach { addRenderableWidget(it) }
     }
 
@@ -128,6 +152,7 @@ class VenusScreen(
         val page = uiState.activePage
         playersPage.searchField()?.editBox()?.setVisible(page == VenusPage.PLAYERS)
         consolePage.inputField()?.editBox()?.setVisible(page == VenusPage.CONSOLE)
+        filesPage.widgets().forEach { it.visible = page == VenusPage.FILES }
         settingsPage.widgets().forEach { it.visible = page == VenusPage.SETTINGS }
         if (page == VenusPage.CONSOLE) {
             consolePage.inputField()?.editBox()?.let {
@@ -145,6 +170,7 @@ class VenusScreen(
         when (page) {
             VenusPage.DASHBOARD -> dashboardPage
             VenusPage.PLAYERS -> playersPage
+            VenusPage.FILES -> filesPage
             VenusPage.CONSOLE -> consolePage
             VenusPage.AUTH -> authPage
             VenusPage.SETTINGS -> settingsPage

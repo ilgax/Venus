@@ -152,6 +152,27 @@ class KeyManagerTest {
     }
 
     @Test
+    fun `V25 fallback keeps private key readable and writable by owner only`() {
+        val path = tempDir.resolve("fallback-private.key").toPath()
+        Files.writeString(path, "secret")
+
+        KeyManager(tempDir).restrictFilePermissionsFallback(path, privateOnly = true)
+
+        try {
+            assertEquals(
+                setOf(
+                    java.nio.file.attribute.PosixFilePermission.OWNER_READ,
+                    java.nio.file.attribute.PosixFilePermission.OWNER_WRITE,
+                ),
+                Files.getPosixFilePermissions(path),
+            )
+        } catch (_: UnsupportedOperationException) {
+            assertTrue(path.toFile().canRead())
+            assertTrue(path.toFile().canWrite())
+        }
+    }
+
+    @Test
     fun `concurrent loadOrGenerate on same instance does not corrupt keys`() {
         val km = KeyManager(tempDir)
         val threadCount = 10
