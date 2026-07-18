@@ -8,6 +8,7 @@ import dev.ilgax.venus.protocol.FileRootsPacket
 import dev.ilgax.venus.protocol.PlayerActionResultPacket
 import dev.ilgax.venus.protocol.PlayerDetail
 import dev.ilgax.venus.protocol.PlayerDetailPacket
+import dev.ilgax.venus.protocol.PlayerListGetPacket
 import dev.ilgax.venus.protocol.PlayerListPacket
 import dev.ilgax.venus.protocol.PlayerSummaryPacket
 import dev.ilgax.venus.protocol.ReadyPacket
@@ -81,6 +82,7 @@ class PacketHandlerTest {
         val playerList =
             PlayerListPacket(
                 type = "player_list",
+                requestId = "list-request",
                 onlineCount = 1,
                 maxPlayers = 20,
                 onlinePlayers =
@@ -114,6 +116,7 @@ class PacketHandlerTest {
                     ),
             )
 
+        SessionState.beginPlayerListRequest("list-request")
         handler.handleData(json.encodeToString(PlayerListPacket.serializer(), playerList))
         handler.handleData(json.encodeToString(PlayerDetailPacket.serializer(), playerDetail))
         handler.handleData(
@@ -132,6 +135,32 @@ class PacketHandlerTest {
         assertEquals(playerList, SessionState.latestPlayerList)
         assertEquals(playerDetail.player, SessionState.latestPlayerDetail)
         assertEquals("heal", SessionState.latestPlayerActionResult?.action)
+    }
+
+    @Test
+    fun `V36 player list handler requests the next cursor and merges the response`() {
+        val sent = mutableListOf<String>()
+        val handler = PacketHandler(json, sent::add)
+        val first = PlayerSummaryPacket("1", "One", "One", true, false, false, false)
+        val second = PlayerSummaryPacket("2", "Two", "Two", true, false, false, false)
+        SessionState.markActive()
+        SessionState.beginPlayerListRequest("list-request")
+
+        handler.handleData(
+            json.encodeToString(
+                PlayerListPacket("player_list", "list-request", 2, 20, listOf(first), emptyList(), emptyList(), null, "next"),
+            ),
+        )
+        val continuation = json.decodeFromString<PlayerListGetPacket>(sent.single())
+        handler.handleData(
+            json.encodeToString(
+                PlayerListPacket("player_list", "list-request", 2, 20, listOf(second), emptyList(), emptyList(), "next"),
+            ),
+        )
+
+        assertEquals("list-request", continuation.requestId)
+        assertEquals("next", continuation.cursor)
+        assertEquals(listOf("1", "2"), SessionState.latestPlayerList?.onlinePlayers?.map { it.uuid })
     }
 
     @Test
@@ -245,5 +274,56 @@ class PacketHandlerTest {
 
         assertNull(SessionState.latestStats)
         assertTrue(SessionState.consoleLines.isEmpty())
+    }
+
+    @Test
+    fun `malformed routed packet types are logged without state mutation`() {
+        val logs = mutableListOf<String>()
+        val handler = PacketHandler(json, {}, logs::add)
+        SessionState.markActive()
+
+        listOf(
+            "console_log",
+            "player_action_result",
+            "player_list",
+            "player_detail",
+            "file_roots",
+            "file_list",
+            "file_action_result",
+            "file_transfer_ready",
+        ).forEach { type -> handler.handleData("""{"type":"$type"}""") }
+
+        listOf(
+            "invalid console_log packet",
+            "invalid player_action_result packet",
+            "invalid player_list packet",
+            "invalid player_detail packet",
+            "invalid file_roots packet",
+            "invalid file_list packet",
+            "invalid file_action_result packet",
+            "invalid file_transfer_ready packet",
+        ).forEach { expected -> assertTrue(logs.any { expected in it }) }
+        assertNull(SessionState.latestPlayerDetail)
+        assertNull(SessionState.latestFileRoots)
+    }
+
+    @Test
+    fun `known and generic auth errors map to user messages`() {
+        val failures = mutableListOf<String>()
+        val handler = PacketHandler(json, {}, {}, {}, failures::add)
+
+        listOf("auth_timeout", "auth_max_users", "auth_invalid_response", "custom_error").forEach { reason ->
+            handler.handleError(json.encodeToString(ErrorPacket.serializer(), ErrorPacket("error", reason)))
+        }
+
+        assertEquals(
+            listOf(
+                "Server approval timed out.",
+                "Server reached max users.",
+                "Server rejected auth response.",
+                "Custom error",
+            ),
+            failures,
+        )
     }
 }

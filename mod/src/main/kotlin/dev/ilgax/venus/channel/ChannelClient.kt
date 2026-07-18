@@ -37,6 +37,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking
 import net.minecraft.client.Minecraft
 import net.minecraft.client.multiplayer.resolver.ServerAddress
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload
 import java.util.Base64
 import java.util.UUID
 
@@ -46,6 +47,7 @@ class ChannelClient(
     private val log: (String) -> Unit,
     private val showAuthFailure: (String) -> Unit = {},
 ) {
+    internal var payloadSender: (CustomPacketPayload) -> Unit = { payload -> ClientPlayNetworking.send(payload) }
     val fileTransfers = ClientFileTransferManager(json, ::sendTransfer, log)
 
     fun register(packetHandler: PacketHandler) {
@@ -72,17 +74,17 @@ class ChannelClient(
     }
 
     fun sendHello() {
-        ClientPlayNetworking.send(HelloPayload)
+        payloadSender(HelloPayload)
     }
 
     fun canSendHello(): Boolean = ClientPlayNetworking.canSend(HelloPayload.TYPE)
 
     fun sendCommand(data: String) {
-        ClientPlayNetworking.send(CmdPayload(data))
+        payloadSender(CmdPayload(data))
     }
 
     private fun sendTransfer(data: String) {
-        ClientPlayNetworking.send(TransferPayload(data))
+        payloadSender(TransferPayload(data))
     }
 
     fun requestFileRoots(): String {
@@ -232,10 +234,12 @@ class ChannelClient(
     }
 
     fun sendPlayerListGet() {
+        val requestId = UUID.randomUUID().toString()
+        SessionState.beginPlayerListRequest(requestId)
         val data =
             json.encodeToString(
                 PlayerListGetPacket.serializer(),
-                PlayerListGetPacket(type = "player_list_get"),
+                PlayerListGetPacket(type = "player_list_get", requestId = requestId),
             )
         sendCommand(data)
     }
@@ -327,7 +331,7 @@ class ChannelClient(
                 ClientKeyPacket.serializer(),
                 ClientKeyPacket(type = "client_key", publicKey = keyManager.publicKeyBase64),
             )
-        ClientPlayNetworking.send(ClientKeyPayload(keyPacket))
+        payloadSender(ClientKeyPayload(keyPacket))
     }
 
     private fun handleAuthChallenge(data: String) {
@@ -408,7 +412,7 @@ class ChannelClient(
                     clientSignature = Base64.getEncoder().encodeToString(clientSig),
                 ),
             )
-        ClientPlayNetworking.send(AuthResponsePayload(response))
+        payloadSender(AuthResponsePayload(response))
         SessionState.markExpectingReady()
     }
 
@@ -418,7 +422,7 @@ class ChannelClient(
                 ErrorPacket.serializer(),
                 ErrorPacket(type = "error", reason = reason),
             )
-        ClientPlayNetworking.send(ErrorPayload(data))
+        payloadSender(ErrorPayload(data))
     }
 
     private fun failAuth(

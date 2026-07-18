@@ -11,6 +11,7 @@ class BackendRuntime private constructor(
     val statSubscriptions: BackendStatSubscriptionManager,
     val approvals: BackendApprovalService,
     val files: BackendFilesHandler,
+    private val players: BackendPlayersHandler,
     private val sessionManager: SessionManager,
 ) {
     fun onPlayerQuit(player: BackendPlayer) {
@@ -18,6 +19,7 @@ class BackendRuntime private constructor(
         logHandler.unsubscribe(player.uuid)
         channelHandler.cleanupPlayer(player.uuid)
         files.cleanupPlayer(player.uuid)
+        players.cleanupPlayer(player.uuid)
     }
 
     fun shutdown() {
@@ -45,6 +47,7 @@ class BackendRuntime private constructor(
                     sessionManager,
                 )
             val filesHandler = BackendFilesHandler(platform, json, sessionManager)
+            val playersHandler = BackendPlayersHandler(platform, json)
             val packetRouter =
                 BackendPacketRouter(
                     platform,
@@ -54,7 +57,7 @@ class BackendRuntime private constructor(
                     },
                     BackendStatsHandler(platform, json, statSubscriptions),
                     logHandler,
-                    BackendPlayersHandler(platform, json),
+                    playersHandler,
                     filesHandler,
                     sessionManager,
                 )
@@ -68,8 +71,10 @@ class BackendRuntime private constructor(
                         statSubscriptions.cancel(uuid)
                         logHandler.unsubscribe(uuid)
                         filesHandler.cleanupPlayer(uuid)
+                        playersHandler.cleanupPlayer(uuid)
                     },
                 files = filesHandler,
+                players = playersHandler,
                 sessionManager = sessionManager,
             )
         }

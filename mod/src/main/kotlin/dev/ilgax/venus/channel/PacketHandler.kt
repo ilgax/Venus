@@ -10,6 +10,7 @@ import dev.ilgax.venus.protocol.FileTransferReadyPacket
 import dev.ilgax.venus.protocol.LogSanitizer
 import dev.ilgax.venus.protocol.PlayerActionResultPacket
 import dev.ilgax.venus.protocol.PlayerDetailPacket
+import dev.ilgax.venus.protocol.PlayerListGetPacket
 import dev.ilgax.venus.protocol.PlayerListPacket
 import dev.ilgax.venus.protocol.ReadyPacket
 import dev.ilgax.venus.protocol.StatSubscribePacket
@@ -20,6 +21,7 @@ import dev.ilgax.venus.transfer.ClientFileTransferManager
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.util.UUID
 
 class PacketHandler(
     private val json: Json,
@@ -154,7 +156,9 @@ class PacketHandler(
                 log("Venus: invalid player_list packet - ${e.message}")
                 return
             }
-        SessionState.updatePlayerList(packet)
+        SessionState.mergePlayerList(packet)?.let { cursor ->
+            sendPlayerListRequest(packet.requestId, cursor)
+        }
     }
 
     private fun handlePlayerDetail(data: String) {
@@ -177,6 +181,23 @@ class PacketHandler(
                 return
             }
         SessionState.updatePlayerActionResult(packet)
+        if (packet.success) {
+            val requestId = UUID.randomUUID().toString()
+            SessionState.beginPlayerListRequest(requestId)
+            sendPlayerListRequest(requestId, null)
+        }
+    }
+
+    private fun sendPlayerListRequest(
+        requestId: String,
+        cursor: String?,
+    ) {
+        sendCommand(
+            json.encodeToString(
+                PlayerListGetPacket.serializer(),
+                PlayerListGetPacket("player_list_get", requestId, cursor),
+            ),
+        )
     }
 
     private fun handleFileRoots(data: String) {

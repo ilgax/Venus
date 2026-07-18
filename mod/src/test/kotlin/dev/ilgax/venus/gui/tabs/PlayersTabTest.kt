@@ -23,6 +23,7 @@ class PlayersTabTest {
     private val testList =
         PlayerListPacket(
             type = "player_list",
+            requestId = "list-1",
             onlineCount = 1,
             maxPlayers = 20,
             onlinePlayers = listOf(createSummary("uuid-1", "OnlinePlayer")),

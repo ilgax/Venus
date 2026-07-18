@@ -30,6 +30,15 @@ data class PendingApproval(
     val requestId: String = UUID.randomUUID().toString(),
 )
 
+data class RevokedSessions(
+    val active: Set<UUID>,
+    val pendingChallenges: Set<UUID>,
+    val pendingApprovals: Set<UUID>,
+) {
+    val affected: Set<UUID>
+        get() = active + pendingChallenges + pendingApprovals
+}
+
 class SessionManager {
     private val pendingSessions = ConcurrentHashMap<UUID, PendingSession>()
     private val pendingApprovals = ConcurrentHashMap<UUID, PendingApproval>()
@@ -76,17 +85,25 @@ class SessionManager {
         activeSessions[uuid] = publicKey
     }
 
+    fun activatePending(
+        uuid: UUID,
+        pending: PendingSession,
+    ): Boolean {
+        if (!pendingSessions.remove(uuid, pending)) return false
+        activeSessions[uuid] = pending.clientPublicKey
+        return true
+    }
+
     fun isActive(uuid: UUID) = activeSessions.containsKey(uuid)
 
-    fun deactivateByPublicKey(publicKey: PublicKey): List<UUID> {
-        val matching =
-            activeSessions
-                .filterValues { it == publicKey }
-                .keys
-                .toList()
-        matching.forEach { deactivate(it) }
-        return matching
-    }
+    fun deactivateByPublicKey(publicKey: PublicKey): List<UUID> = revokeByPublicKey(publicKey).active.toList()
+
+    fun revokeByPublicKey(publicKey: PublicKey): RevokedSessions =
+        RevokedSessions(
+            active = activeSessions.removeMatching { it == publicKey },
+            pendingChallenges = pendingSessions.removeMatching { it.clientPublicKey == publicKey },
+            pendingApprovals = pendingApprovals.removeMatching { it.clientPublicKey == publicKey },
+        )
 
     fun deactivate(uuid: UUID) {
         activeSessions.remove(uuid)
@@ -100,4 +117,10 @@ class SessionManager {
         pendingApprovalOrder.clear()
         activeSessions.clear()
     }
+
+    private fun <T> ConcurrentHashMap<UUID, T>.removeMatching(predicate: (T) -> Boolean): Set<UUID> =
+        entries
+            .mapNotNull { (uuid, value) ->
+                uuid.takeIf { predicate(value) && remove(uuid, value) }
+            }.toSet()
 }

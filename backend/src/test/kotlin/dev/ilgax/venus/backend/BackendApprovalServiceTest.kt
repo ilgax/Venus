@@ -3,6 +3,7 @@ package dev.ilgax.venus.backend
 import dev.ilgax.venus.auth.AuthorizedKeys
 import dev.ilgax.venus.auth.Handshake
 import dev.ilgax.venus.auth.PendingApproval
+import dev.ilgax.venus.auth.RevokedSessions
 import dev.ilgax.venus.auth.SessionManager
 import io.mockk.Runs
 import io.mockk.every
@@ -150,12 +151,17 @@ class BackendApprovalServiceTest {
         val uuid = UUID.randomUUID()
         val cleanupCalls = mutableListOf<UUID>()
         approvals = BackendApprovalService(platform, authHandler, sessionManager, cleanupCalls::add)
-        every { sessionManager.deactivateByPublicKey(keyPair.public) } returns listOf(uuid)
+        val pendingUuid = UUID.randomUUID()
+        every {
+            sessionManager.revokeByPublicKey(keyPair.public)
+        } returns RevokedSessions(active = setOf(uuid), pendingChallenges = setOf(pendingUuid), pendingApprovals = emptySet())
 
         val count = approvals.deactivateSessionsForKey(publicKeyBase64)
 
         assertEquals(1, count)
         assertEquals(listOf(uuid), cleanupCalls)
+        verify { authHandler.cancelPendingAuth(uuid) }
+        verify { authHandler.cancelPendingAuth(pendingUuid) }
     }
 
     @Test

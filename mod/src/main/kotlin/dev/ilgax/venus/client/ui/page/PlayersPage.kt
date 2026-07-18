@@ -4,6 +4,7 @@ import dev.ilgax.venus.client.ui.component.VenusEmptyState
 import dev.ilgax.venus.client.ui.component.VenusPlayerHead
 import dev.ilgax.venus.client.ui.component.VenusPlayerRow
 import dev.ilgax.venus.client.ui.core.Bounds
+import dev.ilgax.venus.client.ui.core.UiRuntime
 import dev.ilgax.venus.client.ui.core.VenusDimensions
 import dev.ilgax.venus.client.ui.core.VenusSpacing
 import dev.ilgax.venus.client.ui.core.VenusTheme
@@ -46,6 +47,17 @@ class PlayersPage(
     private var requestedList = false
     private var actionButtonBounds: List<Pair<Bounds, PlayerAction>> = emptyList()
 
+    internal fun currentUiState(): PlayersUiState =
+        PlayersUiState(
+            query = query,
+            filter = filter,
+            selectedUuid = selectedUuid,
+            pendingAction = pendingAction,
+            pendingRequestId = pendingRequestId,
+            requestedList = requestedList,
+            visiblePlayerUuids = filteredPlayers().map { it.uuid },
+        )
+
     override fun layout(contentBounds: Bounds) {
         this.contentBounds = contentBounds
         val pad = VenusDimensions.CONTENT_PADDING
@@ -82,9 +94,7 @@ class PlayersPage(
         if (searchField == null) {
             searchField =
                 VenusSearchField(
-                    font ?: net.minecraft.client.Minecraft
-                        .getInstance()
-                        .font,
+                    font ?: UiRuntime.font(),
                     0,
                     0,
                     100,
@@ -360,11 +370,7 @@ class PlayersPage(
         var cx = filterX
         for (f in PlayerFilter.entries) {
             val w =
-                (
-                    this.font ?: net.minecraft.client.Minecraft
-                        .getInstance()
-                        .font
-                ).width(f.label) + 16
+                (this.font ?: UiRuntime.font()).width(f.label) + 16
             if (mouseX.toInt() in cx..(cx + w) && mouseY.toInt() in inner.y..(inner.y + VenusDimensions.INPUT_HEIGHT)) {
                 filter = f
                 return true
@@ -405,3 +411,13 @@ class PlayersPage(
         return false
     }
 }
+
+internal data class PlayersUiState(
+    val query: String,
+    val filter: PlayersPage.PlayerFilter,
+    val selectedUuid: String?,
+    val pendingAction: String?,
+    val pendingRequestId: String?,
+    val requestedList: Boolean,
+    val visiblePlayerUuids: List<String>,
+)

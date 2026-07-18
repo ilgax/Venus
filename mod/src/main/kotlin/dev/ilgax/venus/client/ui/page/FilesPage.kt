@@ -4,6 +4,7 @@ import dev.ilgax.venus.client.ui.component.VenusEmptyState
 import dev.ilgax.venus.client.ui.core.Bounds
 import dev.ilgax.venus.client.ui.core.ModalKind
 import dev.ilgax.venus.client.ui.core.ToastKind
+import dev.ilgax.venus.client.ui.core.UiRuntime
 import dev.ilgax.venus.client.ui.core.VenusDimensions
 import dev.ilgax.venus.client.ui.core.VenusSpacing
 import dev.ilgax.venus.client.ui.core.VenusTheme
@@ -14,7 +15,6 @@ import dev.ilgax.venus.client.ui.widget.scrollbarForList
 import dev.ilgax.venus.protocol.FileEntryPacket
 import dev.ilgax.venus.protocol.FileRootPacket
 import dev.ilgax.venus.state.SessionState
-import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.Font
 import net.minecraft.client.gui.GuiGraphics
 import net.minecraft.client.gui.components.AbstractWidget
@@ -36,16 +36,16 @@ class FilesPage(
     private val toast: (ToastKind, String, String) -> Unit,
 ) : VenusPageContract {
     private var bounds = Bounds(0, 0, 0, 0)
-    private val pathField = VenusTextField(Minecraft.getInstance().font, width = 200, placeholder = "Server directory")
-    private val destinationField = VenusTextField(Minecraft.getInstance().font, width = 200, placeholder = "Server destination")
-    private val localField = VenusTextField(Minecraft.getInstance().font, width = 200, placeholder = "Local source / destination")
+    private val pathField = VenusTextField(UiRuntime.font(), width = 200, placeholder = "Server directory")
+    private val destinationField = VenusTextField(UiRuntime.font(), width = 200, placeholder = "Server destination")
+    private val localField = VenusTextField(UiRuntime.font(), width = 200, placeholder = "Local source / destination")
     private val editor =
         MultiLineEditBox
             .builder()
             .setPlaceholder(Component.literal("File contents"))
             .setShowBackground(true)
             .setShowDecorations(true)
-            .build(Minecraft.getInstance().font, 200, 120, Component.literal("File editor"))
+            .build(UiRuntime.font(), 200, 120, Component.literal("File editor"))
             .apply {
                 setCharacterLimit(1_048_576)
                 setLineLimit(100_000)
@@ -64,6 +64,20 @@ class FilesPage(
     private var handledActionRequest: String? = null
     private var loadedEditorHash: String? = null
     private var buttonBounds: Map<String, Bounds> = emptyMap()
+
+    internal fun currentUiState(): FilesUiState =
+        FilesUiState(
+            selectedRootId = selectedRootId,
+            currentPath = currentPath,
+            selectedPath = selectedPath,
+            selectedKind = selectedKind,
+            selectedEditable = selectedEditable,
+            nextOffset = nextOffset,
+            requestedRoots = requestedRoots,
+            lastListRequest = lastListRequest,
+            lastActionRequest = lastActionRequest,
+            loadedEditorHash = loadedEditorHash,
+        )
 
     init {
         pathField.editBox.setMaxLength(1024)
@@ -459,11 +473,7 @@ class FilesPage(
                 if (path.isAbsolute) {
                     path
                 } else {
-                    Minecraft
-                        .getInstance()
-                        .gameDirectory
-                        .toPath()
-                        .resolve(path)
+                    UiRuntime.gameDirectory().resolve(path)
                 }
             Files.exists(resolved.toAbsolutePath().normalize())
         }.getOrDefault(false)
@@ -476,11 +486,7 @@ class FilesPage(
                 if (path.isAbsolute) {
                     path
                 } else {
-                    Minecraft
-                        .getInstance()
-                        .gameDirectory
-                        .toPath()
-                        .resolve(path)
+                    UiRuntime.gameDirectory().resolve(path)
                 }
             ).toAbsolutePath()
                 .normalize()
@@ -495,6 +501,19 @@ class FilesPage(
             else -> "$bytes B"
         }
 }
+
+internal data class FilesUiState(
+    val selectedRootId: String?,
+    val currentPath: String,
+    val selectedPath: String?,
+    val selectedKind: String?,
+    val selectedEditable: Boolean,
+    val nextOffset: Int?,
+    val requestedRoots: Boolean,
+    val lastListRequest: String?,
+    val lastActionRequest: String?,
+    val loadedEditorHash: String?,
+)
 
 internal fun isCurrentFileList(
     packet: dev.ilgax.venus.protocol.FileListPacket,

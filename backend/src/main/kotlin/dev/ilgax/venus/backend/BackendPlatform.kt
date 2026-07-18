@@ -3,7 +3,7 @@ package dev.ilgax.venus.backend
 import dev.ilgax.venus.protocol.PlayerActionPacket
 import dev.ilgax.venus.protocol.PlayerActionResultPacket
 import dev.ilgax.venus.protocol.PlayerDetailPacket
-import dev.ilgax.venus.protocol.PlayerListPacket
+import dev.ilgax.venus.protocol.PlayerSummaryPacket
 import java.nio.file.Path
 import java.util.UUID
 
@@ -41,7 +41,7 @@ interface BackendLogger {
 }
 
 interface BackendPlayers {
-    fun list(viewer: BackendPlayer): PlayerListPacket
+    fun list(viewer: BackendPlayer): BackendPlayerListSnapshot
 
     fun detail(
         viewer: BackendPlayer,
@@ -53,6 +53,14 @@ interface BackendPlayers {
         packet: PlayerActionPacket,
     ): PlayerActionResultPacket
 }
+
+data class BackendPlayerListSnapshot(
+    val onlineCount: Int,
+    val maxPlayers: Int,
+    val onlinePlayers: List<PlayerSummaryPacket>,
+    val whitelistedPlayers: List<PlayerSummaryPacket>,
+    val blockedPlayers: List<PlayerSummaryPacket>,
+)
 
 interface BackendPlatform {
     val logger: BackendLogger

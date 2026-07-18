@@ -4,16 +4,15 @@ import dev.ilgax.venus.backend.BackendConfig
 import dev.ilgax.venus.backend.BackendLogger
 import dev.ilgax.venus.backend.BackendPlatform
 import dev.ilgax.venus.backend.BackendPlayer
+import dev.ilgax.venus.backend.BackendPlayerListSnapshot
 import dev.ilgax.venus.backend.BackendPlayers
 import dev.ilgax.venus.backend.BackendScheduler
 import dev.ilgax.venus.backend.BackendTask
 import dev.ilgax.venus.config.VenusConfig
-import dev.ilgax.venus.protocol.MAX_PLAYERS_PER_LIST
 import dev.ilgax.venus.protocol.PlayerActionPacket
 import dev.ilgax.venus.protocol.PlayerActionResultPacket
 import dev.ilgax.venus.protocol.PlayerDetail
 import dev.ilgax.venus.protocol.PlayerDetailPacket
-import dev.ilgax.venus.protocol.PlayerListPacket
 import dev.ilgax.venus.protocol.PlayerSummaryPacket
 import dev.ilgax.venus.stats.StatsCollector
 import io.papermc.paper.ban.BanListType
@@ -156,7 +155,7 @@ fun Player.toBackendPlayer(): BackendPlayer = BackendPlayer(uniqueId, name)
 private class PaperBackendPlayers(
     private val plugin: JavaPlugin,
 ) : BackendPlayers {
-    override fun list(viewer: BackendPlayer): PlayerListPacket {
+    override fun list(viewer: BackendPlayer): BackendPlayerListSnapshot {
         val bannedUuids =
             plugin.server.bannedPlayers
                 .map { it.uniqueId }
@@ -174,13 +173,12 @@ private class PaperBackendPlayers(
                 .mapNotNull { offlinePlayer -> offlinePlayer.toSummary(blocked = true) }
                 .sortedWith(playerSummaryComparator())
 
-        return PlayerListPacket(
-            type = "player_list",
+        return BackendPlayerListSnapshot(
             onlineCount = plugin.server.onlinePlayers.size,
             maxPlayers = plugin.server.maxPlayers,
-            onlinePlayers = onlinePlayers.take(MAX_PLAYERS_PER_LIST),
-            whitelistedPlayers = whitelistedPlayers.take(MAX_PLAYERS_PER_LIST),
-            blockedPlayers = blockedPlayers.take(MAX_PLAYERS_PER_LIST),
+            onlinePlayers = onlinePlayers,
+            whitelistedPlayers = whitelistedPlayers,
+            blockedPlayers = blockedPlayers,
         )
     }
 

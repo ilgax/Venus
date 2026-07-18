@@ -35,6 +35,7 @@ import java.nio.file.attribute.BasicFileAttributes
 import java.security.MessageDigest
 import java.util.Base64
 import java.util.UUID
+import java.util.WeakHashMap
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -44,11 +45,15 @@ class BackendFilesHandler(
     private val platform: BackendPlatform,
     private val json: Json,
     private val sessionManager: SessionManager,
+    private val ioExecutor: ExecutorService =
+        Executors.newFixedThreadPool(2) { runnable ->
+            Thread(runnable, "venus-files").apply { isDaemon = true }
+        },
 ) {
     private val transfers = ConcurrentHashMap<String, ServerTransfer>()
     private val stateLock = Any()
+    private val sessionGenerations = WeakHashMap<UUID, Long>()
     private var reservedUploadBytes = 0L
-    private val ioExecutor = Executors.newFixedThreadPool(2) { runnable -> Thread(runnable, "venus-files").apply { isDaemon = true } }
     private val timeoutTask =
         platform.scheduler.runRepeating(20, 20) {
             val now = System.currentTimeMillis()
@@ -76,7 +81,7 @@ class BackendFilesHandler(
         data: String,
     ) {
         val packet = decode(FileListGetPacket.serializer(), data, player) ?: return
-        ioExecutor.execute {
+        executeForSession(player) {
             try {
                 val root = configuredRoot(packet.rootId)
                 val directory = resolve(root, packet.path)
@@ -118,7 +123,7 @@ class BackendFilesHandler(
         data: String,
     ) {
         val packet = decode(FileActionPacket.serializer(), data, player) ?: return
-        ioExecutor.execute {
+        executeForSession(player) {
             try {
                 val root = configuredRoot(packet.rootId)
                 requireWritable(root)
@@ -154,7 +159,7 @@ class BackendFilesHandler(
         data: String,
     ) {
         val packet = decode(FileUploadStartPacket.serializer(), data, player) ?: return
-        ioExecutor.execute {
+        executeForSession(player) {
             try {
                 val root = configuredRoot(packet.rootId)
                 requireWritable(root)
@@ -213,7 +218,7 @@ class BackendFilesHandler(
         data: String,
     ) {
         val packet = decode(FileDownloadStartPacket.serializer(), data, player) ?: return
-        ioExecutor.execute {
+        executeForSession(player) {
             try {
                 val root = configuredRoot(packet.rootId)
                 val source = resolve(root, packet.path)
@@ -271,6 +276,9 @@ class BackendFilesHandler(
     }
 
     fun cleanupPlayer(uuid: UUID) {
+        synchronized(stateLock) {
+            sessionGenerations[uuid] = sessionGenerations.getOrDefault(uuid, 0L) + 1L
+        }
         transfers.values.filter { it.player.uuid == uuid }.forEach { cancelTransfer(it, "cancelled", notify = false) }
     }
 
@@ -282,6 +290,20 @@ class BackendFilesHandler(
         timeoutTask.cancel()
         reload()
         ioExecutor.shutdownNow()
+    }
+
+    private fun executeForSession(
+        player: BackendPlayer,
+        action: () -> Unit,
+    ) {
+        val generation = synchronized(stateLock) { sessionGenerations.getOrDefault(player.uuid, 0L) }
+        ioExecutor.execute {
+            val mayStart =
+                synchronized(stateLock) {
+                    sessionGenerations.getOrDefault(player.uuid, 0L) == generation
+                }
+            if (mayStart) action()
+        }
     }
 
     private fun handleUploadChunk(

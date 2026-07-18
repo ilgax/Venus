@@ -1,6 +1,7 @@
 package dev.ilgax.venus.client.ui.widget
 
 import dev.ilgax.venus.client.ui.core.Bounds
+import dev.ilgax.venus.client.ui.core.UiRuntime
 import dev.ilgax.venus.client.ui.core.VenusDimensions
 import dev.ilgax.venus.client.ui.core.VenusTheme
 import dev.ilgax.venus.client.ui.render.ScissorStack
@@ -62,7 +63,7 @@ class VenusList(
      * Render the list background and scissor frame. Caller renders rows inside
      * [renderRows] via the provided [renderer] so no per-item widget exists.
      */
-    inline fun render(
+    fun render(
         g: GuiGraphics,
         mouseX: Int,
         mouseY: Int,
@@ -78,9 +79,7 @@ class VenusList(
         if (itemCount == 0 && emptyText != null) {
             VenusDraw.textCentered(
                 g,
-                net.minecraft.client.Minecraft
-                    .getInstance()
-                    .font,
+                UiRuntime.font(),
                 emptyText,
                 bounds,
                 VenusTheme.TEXT_MUTED,

@@ -76,8 +76,9 @@ class BackendApprovalService(
             } catch (_: Exception) {
                 return 0
             }
-        val deactivated = sessionManager.deactivateByPublicKey(publicKey)
-        deactivated.forEach(cleanupActiveSession)
-        return deactivated.size
+        val revoked = sessionManager.revokeByPublicKey(publicKey)
+        revoked.affected.forEach(authHandler::cancelPendingAuth)
+        revoked.active.forEach(cleanupActiveSession)
+        return revoked.active.size
     }
 }

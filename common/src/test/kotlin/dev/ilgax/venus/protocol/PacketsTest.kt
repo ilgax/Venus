@@ -68,8 +68,8 @@ class PacketsTest {
             json.encodeToString(ConsoleCmdPacket(type = "console_cmd", command = "say hi")),
         )
         assertEquals(
-            """{"type":"player_list_get"}""",
-            json.encodeToString(PlayerListGetPacket(type = "player_list_get")),
+            """{"type":"player_list_get","request_id":"list-1"}""",
+            json.encodeToString(PlayerListGetPacket(type = "player_list_get", requestId = "list-1")),
         )
         assertEquals(
             """{"type":"player_detail_get","uuid":"123"}""",
@@ -135,10 +135,11 @@ class PacketsTest {
     @Test
     fun `player list and detail packets use typed json envelopes`() {
         assertEquals(
-            """{"type":"player_list","online_count":2,"max_players":20,"online_players":[{"uuid":"1","name":"Alice","display_name":"Alice","online":true,"operator":false,"whitelisted":true,"blocked":false}],"whitelisted_players":[],"blocked_players":[]}""",
+            """{"type":"player_list","request_id":"list-1","online_count":2,"max_players":20,"online_players":[{"uuid":"1","name":"Alice","display_name":"Alice","online":true,"operator":false,"whitelisted":true,"blocked":false}],"whitelisted_players":[],"blocked_players":[]}""",
             json.encodeToString(
                 PlayerListPacket(
                     type = "player_list",
+                    requestId = "list-1",
                     onlineCount = 2,
                     maxPlayers = 20,
                     onlinePlayers =
@@ -332,6 +333,7 @@ class PacketsTest {
         assertFailsWith<IllegalArgumentException> {
             PlayerListPacket(
                 type = "player_list",
+                requestId = "list-1",
                 onlineCount = 0,
                 maxPlayers = 20,
                 onlinePlayers = players,

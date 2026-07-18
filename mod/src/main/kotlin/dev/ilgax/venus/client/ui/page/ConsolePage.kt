@@ -4,6 +4,7 @@ import dev.ilgax.venus.client.ui.component.ConsoleLineParser
 import dev.ilgax.venus.client.ui.component.VenusConsoleLine
 import dev.ilgax.venus.client.ui.component.VenusEmptyState
 import dev.ilgax.venus.client.ui.core.Bounds
+import dev.ilgax.venus.client.ui.core.UiRuntime
 import dev.ilgax.venus.client.ui.core.VenusDimensions
 import dev.ilgax.venus.client.ui.core.VenusSpacing
 import dev.ilgax.venus.client.ui.core.VenusTheme
@@ -48,6 +49,18 @@ class ConsolePage(
     private var sourceBtnBounds: Bounds = Bounds(0, 0, 0, 0)
     private var simpleLogger = true
 
+    internal fun currentUiState(): ConsoleUiState =
+        ConsoleUiState(
+            logsSubscribed = logsSubscribed,
+            scrollOffset = scrollOffset,
+            autoScroll = autoScroll,
+            paused = paused,
+            selection = if (selectedStart == null) null else selectionRange(),
+            commandHistory = commandHistory.toList(),
+            historyIndex = historyIndex,
+            simpleLogger = simpleLogger,
+        )
+
     override fun layout(contentBounds: Bounds) {
         this.contentBounds = contentBounds
         val pad = VenusDimensions.CONTENT_PADDING
@@ -56,10 +69,7 @@ class ConsolePage(
         val inputY = inner.bottom - inputH
         inputField?.layout(Bounds(inner.x + 16, inputY, inner.width - 16, inputH))
 
-        val f =
-            font ?: net.minecraft.client.Minecraft
-                .getInstance()
-                .font
+        val f = font ?: UiRuntime.font()
         val btnH = VenusDimensions.BUTTON_HEIGHT
         val btnY = inner.y
         var bx = inner.right
@@ -87,9 +97,7 @@ class ConsolePage(
         if (inputField == null) {
             inputField =
                 VenusTextField(
-                    font ?: net.minecraft.client.Minecraft
-                        .getInstance()
-                        .font,
+                    font ?: UiRuntime.font(),
                     0,
                     0,
                     100,
@@ -277,11 +285,7 @@ class ConsolePage(
         val bounds = Bounds(inner.x, inner.y + 24, inner.width, inner.height - 24 - inputH - VenusSpacing.SM)
         if (!bounds.contains(mouseX.toInt(), mouseY.toInt())) return false
         val lines = visibleLines()
-        val lineH = (
-            net.minecraft.client.Minecraft
-                .getInstance()
-                .font.lineHeight + 2
-        )
+        val lineH = UiRuntime.font().lineHeight + 2
         val visibleCount = (bounds.height / lineH).coerceAtLeast(1)
         val maxScroll = (lines.size - visibleCount).coerceAtLeast(0)
         val dir = if (scrollY > 0) -1 else 1
@@ -323,11 +327,7 @@ class ConsolePage(
         val bounds = Bounds(inner.x, inner.y + 24, inner.width, inner.height - 24 - inputH - VenusSpacing.SM)
         if (bounds.contains(mouseX, mouseY)) {
             val lines = visibleLines()
-            val lineH = (
-                net.minecraft.client.Minecraft
-                    .getInstance()
-                    .font.lineHeight + 2
-            )
+            val lineH = UiRuntime.font().lineHeight + 2
             val idx = scrollOffset + (mouseY.toInt() - bounds.y) / lineH
             if (idx in lines.indices) {
                 selectedStart = idx
@@ -407,9 +407,17 @@ class ConsolePage(
         if (lines.isEmpty()) return
         val from = range.first.coerceIn(0, lines.lastIndex)
         val to = range.last.coerceIn(0, lines.lastIndex)
-        net.minecraft.client.Minecraft
-            .getInstance()
-            .keyboardHandler
-            .setClipboard(lines.subList(from, to + 1).joinToString("\n"))
+        UiRuntime.copyToClipboard(lines.subList(from, to + 1).joinToString("\n"))
     }
 }
+
+internal data class ConsoleUiState(
+    val logsSubscribed: Boolean,
+    val scrollOffset: Int,
+    val autoScroll: Boolean,
+    val paused: Boolean,
+    val selection: IntRange?,
+    val commandHistory: List<String>,
+    val historyIndex: Int?,
+    val simpleLogger: Boolean,
+)

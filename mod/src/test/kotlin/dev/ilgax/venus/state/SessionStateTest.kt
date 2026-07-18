@@ -4,6 +4,7 @@ import dev.ilgax.venus.protocol.CmdResponsePacket
 import dev.ilgax.venus.protocol.PlayerActionResultPacket
 import dev.ilgax.venus.protocol.PlayerDetail
 import dev.ilgax.venus.protocol.PlayerListPacket
+import dev.ilgax.venus.protocol.PlayerSummaryPacket
 import dev.ilgax.venus.protocol.StatsPacket
 import dev.ilgax.venus.state.SessionState.HandshakeState
 import kotlin.test.AfterTest
@@ -40,6 +41,7 @@ class SessionStateTest {
         SessionState.updatePlayerList(
             PlayerListPacket(
                 type = "player_list",
+                requestId = "list-1",
                 onlineCount = 1,
                 maxPlayers = 20,
                 onlinePlayers = emptyList(),
@@ -85,6 +87,29 @@ class SessionStateTest {
         assertNull(SessionState.latestPlayerActionResult)
         assertNull(SessionState.fileEditor)
         assertTrue(SessionState.activeFileTransfers.isEmpty())
+    }
+
+    @Test
+    fun `V36 matching player list pages merge while stale pages are ignored`() {
+        val first = playerSummary("1")
+        val second = playerSummary("2")
+        SessionState.beginPlayerListRequest("request-1")
+
+        val next =
+            SessionState.mergePlayerList(
+                PlayerListPacket("player_list", "request-1", 2, 20, listOf(first), emptyList(), emptyList(), null, "next"),
+            )
+        SessionState.mergePlayerList(
+            PlayerListPacket("player_list", "stale", 1, 20, listOf(playerSummary("stale")), emptyList(), emptyList()),
+        )
+        val done =
+            SessionState.mergePlayerList(
+                PlayerListPacket("player_list", "request-1", 2, 20, listOf(second), emptyList(), emptyList(), "next", null),
+            )
+
+        assertEquals("next", next)
+        assertNull(done)
+        assertEquals(listOf("1", "2"), SessionState.latestPlayerList?.onlinePlayers?.map { it.uuid })
     }
 
     @Test
@@ -167,3 +192,5 @@ class SessionStateTest {
         assertFalse(SessionState.sessionActive)
     }
 }
+
+private fun playerSummary(uuid: String) = PlayerSummaryPacket(uuid, "Player $uuid", "Player $uuid", true, false, false, false)

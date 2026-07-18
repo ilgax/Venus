@@ -118,6 +118,29 @@ class SessionManagerTest {
     }
 
     @Test
+    fun `V34 revokeByPublicKey removes active pending and approval state`() {
+        val activeUuid = UUID.randomUUID()
+        val pendingUuid = UUID.randomUUID()
+        val approvalUuid = UUID.randomUUID()
+        val otherUuid = UUID.randomUUID()
+        val otherKeyPair = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
+        sessionManager.activate(activeUuid, keyPair.public)
+        sessionManager.addPending(pendingUuid, PendingSession(keyPair.public, ByteArray(32) { 3 }))
+        sessionManager.addPendingApproval(approvalUuid, PendingApproval(keyPair.public, keyPair.public.base64()))
+        sessionManager.activate(otherUuid, otherKeyPair.public)
+
+        val revoked = sessionManager.revokeByPublicKey(keyPair.public)
+
+        assertEquals(setOf(activeUuid), revoked.active)
+        assertEquals(setOf(pendingUuid), revoked.pendingChallenges)
+        assertEquals(setOf(approvalUuid), revoked.pendingApprovals)
+        assertFalse(sessionManager.isActive(activeUuid))
+        assertNull(sessionManager.getPending(pendingUuid))
+        assertNull(sessionManager.getPendingApproval(approvalUuid))
+        assertTrue(sessionManager.isActive(otherUuid))
+    }
+
+    @Test
     fun `deactivate removes all three associations`() {
         sessionManager.addPending(uuid, PendingSession(keyPair.public, ByteArray(32) { 7 }))
         sessionManager.addPendingApproval(uuid, PendingApproval(keyPair.public, "key"))

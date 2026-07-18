@@ -7,6 +7,7 @@ import dev.ilgax.venus.protocol.FileRootsPacket
 import dev.ilgax.venus.protocol.PlayerActionResultPacket
 import dev.ilgax.venus.protocol.PlayerDetail
 import dev.ilgax.venus.protocol.PlayerListPacket
+import dev.ilgax.venus.protocol.PlayerSummaryPacket
 import dev.ilgax.venus.protocol.StatsPacket
 
 object SessionState {
@@ -67,6 +68,8 @@ object SessionState {
 
     private val console = mutableListOf<String>()
     private val statHistory = mutableListOf<StatsPacket>()
+    private val playerListLock = Any()
+    private var playerListRequest: PlayerListRequest? = null
 
     val consoleLines: List<String>
         get() = synchronized(console) { console.toList() }
@@ -86,6 +89,7 @@ object SessionState {
     fun markIdle() {
         handshakeState = HandshakeState.IDLE
         sessionActive = false
+        synchronized(playerListLock) { playerListRequest = null }
     }
 
     fun activate() {
@@ -112,7 +116,37 @@ object SessionState {
 
     fun updatePlayerList(playerList: PlayerListPacket) {
         latestPlayerList = playerList
+        synchronized(playerListLock) { playerListRequest = null }
     }
+
+    fun beginPlayerListRequest(requestId: String) {
+        synchronized(playerListLock) {
+            playerListRequest = PlayerListRequest(requestId)
+        }
+    }
+
+    fun mergePlayerList(page: PlayerListPacket): String? =
+        synchronized(playerListLock) {
+            val request = playerListRequest ?: return@synchronized null
+            if (page.requestId != request.requestId || page.cursor != request.expectedCursor) return@synchronized null
+            request.onlinePlayers += page.onlinePlayers
+            request.whitelistedPlayers += page.whitelistedPlayers
+            request.blockedPlayers += page.blockedPlayers
+            latestPlayerList =
+                PlayerListPacket(
+                    type = page.type,
+                    requestId = page.requestId,
+                    onlineCount = page.onlineCount,
+                    maxPlayers = page.maxPlayers,
+                    onlinePlayers = request.onlinePlayers.toList(),
+                    whitelistedPlayers = request.whitelistedPlayers.toList(),
+                    blockedPlayers = request.blockedPlayers.toList(),
+                    nextCursor = page.nextCursor,
+                )
+            request.expectedCursor = page.nextCursor
+            if (page.nextCursor == null) playerListRequest = null
+            page.nextCursor
+        }
 
     fun updatePlayerDetail(playerDetail: PlayerDetail) {
         latestPlayerDetail = playerDetail
@@ -199,6 +233,14 @@ object SessionState {
     private const val MAX_STAT_HISTORY = 60
     private const val MAX_FILE_TRANSFER_HISTORY = 8
 }
+
+private data class PlayerListRequest(
+    val requestId: String,
+    var expectedCursor: String? = null,
+    val onlinePlayers: MutableList<PlayerSummaryPacket> = mutableListOf(),
+    val whitelistedPlayers: MutableList<PlayerSummaryPacket> = mutableListOf(),
+    val blockedPlayers: MutableList<PlayerSummaryPacket> = mutableListOf(),
+)
 
 data class FileTransferView(
     val transferId: String,

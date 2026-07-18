@@ -76,6 +76,26 @@ class VenusScreen(
     private lateinit var settingsPage: SettingsPage
     private var currentPage: dev.ilgax.venus.client.ui.page.VenusPageContract? = null
 
+    internal fun currentUiState(): VenusScreenUiState =
+        VenusScreenUiState(
+            activePage = uiState.activePage,
+            previousPage = uiState.previousPage,
+            compactMode = uiState.compactMode,
+            modalCount = uiState.modalStack.size,
+            toastCount = uiState.toasts.size,
+            contentBounds = contentBounds,
+            textInputFocused = isTextInputFocused(),
+        )
+
+    internal fun initializeForJvmTest(
+        width: Int,
+        height: Int,
+    ) {
+        this.width = width
+        this.height = height
+        init()
+    }
+
     override fun init() {
         uiState.compactMode = width < VenusDimensions.COMPACT_WIDTH || height < VenusDimensions.COMPACT_HEIGHT
         val margin = if (uiState.compactMode) VenusDimensions.WINDOW_MARGIN_COMPACT else VenusDimensions.WINDOW_MARGIN
@@ -302,25 +322,29 @@ class VenusScreen(
     ): Boolean {
         val mouseX = mouseButtonEvent.x().toInt()
         val mouseY = mouseButtonEvent.y().toInt()
+        val button = mouseButtonEvent.button()
 
         // Modal captures input
         if (uiState.currentModal != null) {
+            if (button != GLFW.GLFW_MOUSE_BUTTON_LEFT) return true
             return handleModalClick(mouseX, mouseY)
         }
 
-        closeBtn?.let {
-            if (it.bounds.contains(mouseX, mouseY)) {
-                onClose()
+        if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+            closeBtn?.let {
+                if (it.bounds.contains(mouseX, mouseY)) {
+                    onClose()
+                    return true
+                }
+            }
+
+            sidebar?.hitTest(mouseX, mouseY)?.let { page ->
+                navigateTo(page)
                 return true
             }
         }
 
-        sidebar?.hitTest(mouseX, mouseY)?.let { page ->
-            navigateTo(page)
-            return true
-        }
-
-        if (currentPage?.mouseClicked(mouseButtonEvent.x(), mouseButtonEvent.y(), 0) == true) return true
+        if (currentPage?.mouseClicked(mouseButtonEvent.x(), mouseButtonEvent.y(), button) == true) return true
 
         return super.mouseClicked(mouseButtonEvent, doubleClick)
     }
@@ -416,3 +440,13 @@ class VenusScreen(
         )
     }
 }
+
+internal data class VenusScreenUiState(
+    val activePage: VenusPage,
+    val previousPage: VenusPage?,
+    val compactMode: Boolean,
+    val modalCount: Int,
+    val toastCount: Int,
+    val contentBounds: Bounds,
+    val textInputFocused: Boolean,
+)

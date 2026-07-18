@@ -37,6 +37,7 @@ class ClientFileTransferManager(
     private val sendRaw: (String) -> Unit,
     private val log: (String) -> Unit,
 ) {
+    internal var dispatch: ((() -> Unit) -> Unit) = { task -> Minecraft.getInstance().execute(task) }
     private val pendingUploads = ConcurrentHashMap<String, PendingUpload>()
     private val pendingDownloads = ConcurrentHashMap<String, PendingDownload>()
     private val transfers = ConcurrentHashMap<String, ClientTransfer>()
@@ -381,7 +382,7 @@ class ClientFileTransferManager(
         serializer: kotlinx.serialization.KSerializer<T>,
     ) {
         val data = json.encodeToString(serializer, packet)
-        Minecraft.getInstance().execute { sendRaw(data) }
+        dispatch { sendRaw(data) }
     }
 
     private fun resolveLocalPath(raw: String): Path {

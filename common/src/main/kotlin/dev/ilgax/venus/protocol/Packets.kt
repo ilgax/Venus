@@ -127,7 +127,14 @@ data class CmdResponsePacket(
 @Serializable
 data class PlayerListGetPacket(
     val type: String,
-)
+    @SerialName("request_id") val requestId: String,
+    val cursor: String? = null,
+) {
+    init {
+        require(requestId.isNotBlank() && requestId.length <= MAX_REQUEST_ID_LENGTH) { "request_id is invalid" }
+        require(cursor == null || cursor.length <= MAX_CURSOR_LENGTH) { "cursor is too long" }
+    }
+}
 
 @Serializable
 data class PlayerDetailGetPacket(
@@ -172,13 +179,19 @@ data class PlayerSummaryPacket(
 @Serializable
 data class PlayerListPacket(
     val type: String,
+    @SerialName("request_id") val requestId: String,
     @SerialName("online_count") val onlineCount: Int,
     @SerialName("max_players") val maxPlayers: Int,
     @SerialName("online_players") val onlinePlayers: List<PlayerSummaryPacket>,
     @SerialName("whitelisted_players") val whitelistedPlayers: List<PlayerSummaryPacket>,
     @SerialName("blocked_players") val blockedPlayers: List<PlayerSummaryPacket>,
+    val cursor: String? = null,
+    @SerialName("next_cursor") val nextCursor: String? = null,
 ) {
     init {
+        require(requestId.isNotBlank() && requestId.length <= MAX_REQUEST_ID_LENGTH) { "request_id is invalid" }
+        require(cursor == null || cursor.length <= MAX_CURSOR_LENGTH) { "cursor is too long" }
+        require(nextCursor == null || nextCursor.length <= MAX_CURSOR_LENGTH) { "next_cursor is too long" }
         require(onlinePlayers.size <= MAX_PLAYERS_PER_LIST) { "online_players must have at most $MAX_PLAYERS_PER_LIST entries" }
         require(whitelistedPlayers.size <= MAX_PLAYERS_PER_LIST) { "whitelisted_players must have at most $MAX_PLAYERS_PER_LIST entries" }
         require(blockedPlayers.size <= MAX_PLAYERS_PER_LIST) { "blocked_players must have at most $MAX_PLAYERS_PER_LIST entries" }
@@ -235,6 +248,8 @@ const val MAX_PLAYERS_PER_LIST: Int = 200
 const val MAX_KEY_FIELD_LENGTH: Int = 512
 const val MAX_REASON_LENGTH: Int = 256
 const val MAX_ACTION_MESSAGE_LENGTH: Int = 256
+const val MAX_REQUEST_ID_LENGTH: Int = 64
+const val MAX_CURSOR_LENGTH: Int = 64
 const val PRE_AUTH_RATE_LIMIT: Int = 5
 const val PRE_AUTH_RATE_WINDOW_MS: Long = 10_000
 

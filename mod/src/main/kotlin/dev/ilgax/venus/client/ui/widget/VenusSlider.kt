@@ -1,5 +1,6 @@
 package dev.ilgax.venus.client.ui.widget
 
+import dev.ilgax.venus.client.ui.core.UiRuntime
 import dev.ilgax.venus.client.ui.core.VenusDimensions
 import dev.ilgax.venus.client.ui.core.VenusTheme
 import dev.ilgax.venus.client.ui.core.clamp
@@ -62,10 +63,7 @@ class VenusSlider(
         VenusDraw.rect(g, knobX, knobY, 4, bounds.height - 4, VenusTheme.TEXT)
 
         val label = valueFormatter(value)
-        val font =
-            net.minecraft.client.Minecraft
-                .getInstance()
-                .font
+        val font = UiRuntime.font()
         VenusDraw.text(g, font, label, bounds.x, bounds.y - font.lineHeight - 1, VenusTheme.TEXT_MUTED, false)
 
         if (isFocused) {

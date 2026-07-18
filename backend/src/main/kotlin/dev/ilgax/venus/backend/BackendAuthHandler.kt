@@ -150,9 +150,31 @@ class BackendAuthHandler(
             return
         }
 
-        sessionManager.removePending(player.uuid)
+        val clientPublicKeyBase64 = Base64.getEncoder().encodeToString(pending.clientPublicKey.encoded)
+        val activation =
+            synchronized(AuthorizedKeys) {
+                when {
+                    !AuthorizedKeys.isAuthorized(clientPublicKeyBase64) -> PendingActivation.REVOKED
+                    sessionManager.activatePending(player.uuid, pending) -> PendingActivation.ACTIVATED
+                    else -> PendingActivation.STALE
+                }
+            }
+        when (activation) {
+            PendingActivation.REVOKED -> {
+                platform.logger.warning("Authorization was revoked before ${player.name} completed authentication")
+                failPendingAuth(player, "auth_denied")
+                return
+            }
+
+            PendingActivation.STALE -> {
+                platform.logger.warning("Pending session changed before ${player.name} completed authentication")
+                failPendingAuth(player, "auth_invalid_response")
+                return
+            }
+
+            PendingActivation.ACTIVATED -> Unit
+        }
         sessionTimeoutTasks.remove(player.uuid)?.cancel()
-        sessionManager.activate(player.uuid, pending.clientPublicKey)
         platform.logger.info("Venus session active for ${player.name} (key ${Handshake.fingerprint(pending.clientPublicKey)})")
 
         val ready =
@@ -210,6 +232,11 @@ class BackendAuthHandler(
 
     fun cancelPendingApproval(uuid: UUID) {
         approvalTimeoutTasks.remove(uuid)?.cancel()
+    }
+
+    fun cancelPendingAuth(uuid: UUID) {
+        approvalTimeoutTasks.remove(uuid)?.cancel()
+        sessionTimeoutTasks.remove(uuid)?.cancel()
     }
 
     fun onPlayerQuit(player: BackendPlayer) {
@@ -310,5 +337,11 @@ class BackendAuthHandler(
         sendAuthError(player, reason)
         sessionManager.removePending(player.uuid)
         sessionTimeoutTasks.remove(player.uuid)?.cancel()
+    }
+
+    private enum class PendingActivation {
+        ACTIVATED,
+        REVOKED,
+        STALE,
     }
 }

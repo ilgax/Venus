@@ -4,6 +4,7 @@ import dev.ilgax.venus.backend.BackendConfig
 import dev.ilgax.venus.backend.BackendLogger
 import dev.ilgax.venus.backend.BackendPlatform
 import dev.ilgax.venus.backend.BackendPlayer
+import dev.ilgax.venus.backend.BackendPlayerListSnapshot
 import dev.ilgax.venus.backend.BackendPlayers
 import dev.ilgax.venus.backend.BackendScheduler
 import dev.ilgax.venus.backend.BackendTask
@@ -13,12 +14,10 @@ import dev.ilgax.venus.network.VenusRawAuthPayload
 import dev.ilgax.venus.network.VenusRawDataPayload
 import dev.ilgax.venus.network.VenusRawPayload
 import dev.ilgax.venus.network.VenusRawReadyPayload
-import dev.ilgax.venus.protocol.MAX_PLAYERS_PER_LIST
 import dev.ilgax.venus.protocol.PlayerActionPacket
 import dev.ilgax.venus.protocol.PlayerActionResultPacket
 import dev.ilgax.venus.protocol.PlayerDetail
 import dev.ilgax.venus.protocol.PlayerDetailPacket
-import dev.ilgax.venus.protocol.PlayerListPacket
 import dev.ilgax.venus.protocol.PlayerSummaryPacket
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.booleanOrNull
@@ -188,7 +187,7 @@ private class FabricBackendScheduler : BackendScheduler {
 private class FabricBackendPlayers(
     private val serverProvider: () -> MinecraftServer?,
 ) : BackendPlayers {
-    override fun list(viewer: BackendPlayer): PlayerListPacket {
+    override fun list(viewer: BackendPlayer): BackendPlayerListSnapshot {
         val server = serverProvider()
         val playerList = server?.playerList
         val onlinePlayers =
@@ -227,13 +226,12 @@ private class FabricBackendPlayers(
                     }
                 }?.sortedWith(playerSummaryComparator())
                 ?: emptyList()
-        return PlayerListPacket(
-            type = "player_list",
+        return BackendPlayerListSnapshot(
             onlineCount = onlinePlayers.size,
             maxPlayers = server?.maxPlayers ?: 0,
-            onlinePlayers = onlinePlayers.take(MAX_PLAYERS_PER_LIST),
-            whitelistedPlayers = whitelistedPlayers.take(MAX_PLAYERS_PER_LIST),
-            blockedPlayers = blockedPlayers.take(MAX_PLAYERS_PER_LIST),
+            onlinePlayers = onlinePlayers,
+            whitelistedPlayers = whitelistedPlayers,
+            blockedPlayers = blockedPlayers,
         )
     }
 

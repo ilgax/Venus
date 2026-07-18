@@ -12,6 +12,7 @@ import dev.ilgax.venus.protocol.ErrorPacket
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
+import io.mockk.slot
 import io.mockk.unmockkAll
 import io.mockk.verify
 import kotlinx.serialization.json.Json
@@ -21,6 +22,7 @@ import org.junit.Test
 import java.security.KeyPairGenerator
 import java.util.Base64
 import java.util.UUID
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class BackendAuthHandlerTest {
@@ -135,6 +137,7 @@ class BackendAuthHandlerTest {
             player.uuid,
             PendingSession(clientKeyPair.public, challenge),
         )
+        every { AuthorizedKeys.isAuthorized(Base64.getEncoder().encodeToString(clientKeyPair.public.encoded)) } returns true
 
         val clientSig =
             Handshake.signTranscript(
@@ -158,6 +161,39 @@ class BackendAuthHandlerTest {
 
         assertTrue(sessionManager.isActive(player.uuid))
         verify { platform.sendReady(player, any()) }
+    }
+
+    @Test
+    fun `V34 revoked key cannot complete pending challenge`() {
+        val player = BackendPlayer(UUID.randomUUID(), "TestPlayer")
+        val challenge = Handshake.generateChallenge()
+        val clientKeyBase64 = Base64.getEncoder().encodeToString(clientKeyPair.public.encoded)
+        sessionManager.addPending(player.uuid, PendingSession(clientKeyPair.public, challenge))
+        every { AuthorizedKeys.isAuthorized(clientKeyBase64) } returns false
+        val clientSig =
+            Handshake.signTranscript(
+                serverKeyPair.public,
+                clientKeyPair.public,
+                challenge,
+                Handshake.ROLE_CLIENT,
+                clientKeyPair.private,
+            )
+        val data =
+            json.encodeToString(
+                AuthResponsePacket.serializer(),
+                AuthResponsePacket(
+                    "auth_response",
+                    Base64.getEncoder().encodeToString(challenge),
+                    Base64.getEncoder().encodeToString(clientSig),
+                ),
+            )
+
+        authHandler.handleAuthResponse(player, data)
+
+        assertFalse(sessionManager.isActive(player.uuid))
+        assertTrue(sessionManager.getPending(player.uuid) == null)
+        verify { platform.sendError(player, match<String> { it.contains("auth_denied") }) }
+        verify(exactly = 0) { platform.sendReady(player, any()) }
     }
 
     @Test
@@ -322,5 +358,132 @@ class BackendAuthHandlerTest {
 
         assertTrue(sessionManager.getPending(player.uuid) == null)
         verify { platform.sendKey(player, any()) }
+    }
+
+    @Test
+    fun `client key validation rejects malformed type and blank key`() {
+        val player = BackendPlayer(UUID.randomUUID(), "TestPlayer")
+
+        authHandler.handleClientKey(player, "not-json")
+        authHandler.handleClientKey(
+            player,
+            json.encodeToString(ClientKeyPacket.serializer(), ClientKeyPacket("wrong_type", "key")),
+        )
+        authHandler.handleClientKey(
+            player,
+            json.encodeToString(ClientKeyPacket.serializer(), ClientKeyPacket("client_key", "   ")),
+        )
+
+        verify { logger.warning(match<String> { it.contains("Malformed client key packet") }) }
+        verify { logger.warning(match<String> { it.contains("Invalid client key packet type") }) }
+        verify { logger.warning(match<String> { it.contains("Empty client key") }) }
+        verify(exactly = 0) { platform.sendAuth(any(), any()) }
+    }
+
+    @Test
+    fun `auth response validation rejects wrong type and invalid base64 fields`() {
+        val player = BackendPlayer(UUID.randomUUID(), "TestPlayer")
+        val challenge = Handshake.generateChallenge()
+        sessionManager.addPending(player.uuid, PendingSession(clientKeyPair.public, challenge))
+
+        authHandler.handleAuthResponse(
+            player,
+            json.encodeToString(AuthResponsePacket.serializer(), AuthResponsePacket("wrong", "key", "signature")),
+        )
+        sessionManager.addPending(player.uuid, PendingSession(clientKeyPair.public, challenge))
+        authHandler.handleAuthResponse(
+            player,
+            json.encodeToString(AuthResponsePacket.serializer(), AuthResponsePacket("auth_response", "%%%", "signature")),
+        )
+        sessionManager.addPending(player.uuid, PendingSession(clientKeyPair.public, challenge))
+        authHandler.handleAuthResponse(
+            player,
+            json.encodeToString(
+                AuthResponsePacket.serializer(),
+                AuthResponsePacket("auth_response", Base64.getEncoder().encodeToString(challenge), "%%%"),
+            ),
+        )
+
+        verify(exactly = 3) { platform.sendError(player, match<String> { it.contains("auth_invalid_response") }) }
+        assertTrue(sessionManager.getPending(player.uuid) == null)
+    }
+
+    @Test
+    fun `client error validation handles malformed wrong type and sanitized generic reason`() {
+        val player = BackendPlayer(UUID.randomUUID(), "TestPlayer")
+
+        authHandler.handleClientError(player, "not-json")
+        authHandler.handleClientError(
+            player,
+            json.encodeToString(ErrorPacket.serializer(), ErrorPacket("wrong", "reason")),
+        )
+        authHandler.handleClientError(
+            player,
+            json.encodeToString(ErrorPacket.serializer(), ErrorPacket("error", "line\nbreak")),
+        )
+
+        verify { logger.warning(match<String> { it.contains("malformed error packet") }) }
+        verify { logger.warning(match<String> { it.contains("invalid error packet type") }) }
+        verify { logger.warning(match<String> { it.contains("line\\nbreak") }) }
+    }
+
+    @Test
+    fun `scheduled challenge timeout removes pending session`() {
+        val callback = slot<() -> Unit>()
+        every { scheduler.runLater(any(), capture(callback)) } returns task
+        val player = BackendPlayer(UUID.randomUUID(), "TestPlayer")
+        val clientKeyB64 = Base64.getEncoder().encodeToString(clientKeyPair.public.encoded)
+        every { AuthorizedKeys.isAuthorized(clientKeyB64) } returns true
+
+        authHandler.handleClientKey(
+            player,
+            json.encodeToString(ClientKeyPacket.serializer(), ClientKeyPacket("client_key", clientKeyB64)),
+        )
+        callback.captured()
+
+        assertTrue(sessionManager.getPending(player.uuid) == null)
+        verify { logger.info(match<String> { it.contains("Auth challenge expired") }) }
+    }
+
+    @Test
+    fun `scheduled approval timeout notifies connected player`() {
+        val callback = slot<() -> Unit>()
+        every { scheduler.runLater(any(), capture(callback)) } returns task
+        val player = BackendPlayer(UUID.randomUUID(), "TestPlayer")
+        val clientKeyB64 = Base64.getEncoder().encodeToString(clientKeyPair.public.encoded)
+        every { AuthorizedKeys.isAuthorized(clientKeyB64) } returns false
+        every { AuthorizedKeys.count() } returns 0
+        every { platform.player(player.uuid) } returns player
+
+        authHandler.handleClientKey(
+            player,
+            json.encodeToString(ClientKeyPacket.serializer(), ClientKeyPacket("client_key", clientKeyB64)),
+        )
+        callback.captured()
+
+        assertTrue(sessionManager.getPendingApproval(player.uuid) == null)
+        verify { platform.sendError(player, match<String> { it.contains("auth_timeout") }) }
+        verify { logger.info(match<String> { it.contains("timed out") }) }
+    }
+
+    @Test
+    fun `notification and cancellation helpers send reasons and cancel tasks`() {
+        val player = BackendPlayer(UUID.randomUUID(), "TestPlayer")
+        val clientKeyB64 = Base64.getEncoder().encodeToString(clientKeyPair.public.encoded)
+        every { AuthorizedKeys.isAuthorized(clientKeyB64) } returns true
+        authHandler.handleClientKey(
+            player,
+            json.encodeToString(ClientKeyPacket.serializer(), ClientKeyPacket("client_key", clientKeyB64)),
+        )
+
+        authHandler.notifyDenied(player)
+        authHandler.notifyMaxUsers(player)
+        authHandler.cancelPendingAuth(player.uuid)
+        authHandler.cancelPendingApproval(player.uuid)
+        authHandler.cancelAllTimeouts()
+
+        verify { platform.sendError(player, match<String> { it.contains("auth_denied") }) }
+        verify { platform.sendError(player, match<String> { it.contains("auth_max_users") }) }
+        verify(atLeast = 1) { task.cancel() }
     }
 }

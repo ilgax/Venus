@@ -1,6 +1,7 @@
 package dev.ilgax.venus.client.ui.widget
 
 import dev.ilgax.venus.client.ui.core.Animation
+import dev.ilgax.venus.client.ui.core.UiRuntime
 import dev.ilgax.venus.client.ui.core.VenusDimensions
 import dev.ilgax.venus.client.ui.core.VenusTheme
 import dev.ilgax.venus.client.ui.render.VenusDraw
@@ -76,10 +77,7 @@ class VenusButton(
         }
 
         val label = message.string
-        val font =
-            net.minecraft.client.Minecraft
-                .getInstance()
-                .font
+        val font = UiRuntime.font()
         val textColor = if (!enabled) VenusTheme.TEXT_DISABLED else textColor()
 
         val iconW = if (leadingIcon != null) VenusDimensions.ICON_SMALL + 4 else 0
