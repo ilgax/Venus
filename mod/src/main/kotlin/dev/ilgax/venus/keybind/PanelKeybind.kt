@@ -2,9 +2,10 @@ package dev.ilgax.venus.keybind
 
 import com.mojang.blaze3d.platform.InputConstants
 import dev.ilgax.venus.channel.ChannelClient
-import dev.ilgax.venus.client.ui.VenusScreen
-import dev.ilgax.venus.client.ui.page.SettingsPage
-import dev.ilgax.venus.config.FabricVenusConfig
+import dev.ilgax.venus.client.ui.ModularVenusScreen
+import dev.ilgax.venus.client.ui.module.UiScreenServices
+import dev.ilgax.venus.client.ui.profile.UiProfileController
+import dev.ilgax.venus.state.SessionState
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper
 import net.minecraft.client.KeyMapping
@@ -29,13 +30,13 @@ object PanelKeybind {
 
     fun register(
         channelClient: ChannelClient,
-        config: FabricVenusConfig,
+        profiles: UiProfileController,
     ) {
         KeyBindingHelper.registerKeyBinding(keybind)
 
         ClientTickEvents.END_CLIENT_TICK.register { client ->
             while (keybind.consumeClick()) {
-                toggle(client, channelClient, config)
+                toggle(client, channelClient, profiles)
             }
         }
     }
@@ -53,57 +54,41 @@ object PanelKeybind {
     private fun toggle(
         client: Minecraft,
         channelClient: ChannelClient,
-        config: FabricVenusConfig,
+        profiles: UiProfileController,
     ) {
-        if (client.screen is VenusScreen) {
+        if (client.screen is ModularVenusScreen) {
             client.setScreen(null)
         } else {
-            val c = config.backendConfig
+            val profile = profiles.resolve(SessionState.serverAddress)
             client.setScreen(
-                VenusScreen(
-                    sendConsoleCommand = channelClient::sendConsoleCommand,
-                    subscribeLogs = channelClient::sendLogSubscribe,
-                    requestPlayerList = channelClient::sendPlayerListGet,
-                    requestPlayerDetail = channelClient::sendPlayerDetailGet,
-                    sendPlayerAction = { uuid, action, value ->
-                        when (value) {
-                            is Boolean -> channelClient.sendPlayerAction(uuid, action, value)
-                            is String -> channelClient.sendPlayerAction(uuid, action, value)
-                            else -> channelClient.sendPlayerAction(uuid, action, null)
-                        }
-                    },
-                    subscribeStats = channelClient::sendStatSubscribe,
-                    requestFileRoots = channelClient::requestFileRoots,
-                    requestFileList = channelClient::requestFileList,
-                    sendFileAction = channelClient::sendFileAction,
-                    uploadFile = { local, root, destination, overwrite ->
-                        channelClient.uploadFile(local, root, destination, overwrite)
-                    },
-                    downloadFile = channelClient::downloadFile,
-                    openFileEditor = channelClient::openFileEditor,
-                    saveEditedFile = channelClient::saveEditedFile,
-                    cancelFileTransfer = channelClient.fileTransfers::cancel,
-                    onSaveSettings = { settings ->
-                        config.save(
-                            config.backendConfig.copy(
-                                compactMode = settings.compactMode,
-                                animationsEnabled = settings.animationsEnabled,
-                                backgroundOpacity = settings.backgroundOpacity,
-                                showPlayerHeads = settings.showPlayerHeads,
-                                confirmDangerousActions = settings.confirmDangerousActions,
-                                consoleHistoryLimit = settings.consoleHistoryLimit,
-                            ),
-                        )
-                    },
-                    initialSettings =
-                        SettingsPage.Settings(
-                            compactMode = c.compactMode,
-                            animationsEnabled = c.animationsEnabled,
-                            backgroundOpacity = c.backgroundOpacity,
-                            showPlayerHeads = c.showPlayerHeads,
-                            confirmDangerousActions = c.confirmDangerousActions,
-                            consoleHistoryLimit = c.consoleHistoryLimit,
+                ModularVenusScreen(
+                    services =
+                        UiScreenServices(
+                            sendConsoleCommand = channelClient::sendConsoleCommand,
+                            subscribeLogs = channelClient::sendLogSubscribe,
+                            requestPlayerList = channelClient::sendPlayerListGet,
+                            requestPlayerDetail = channelClient::sendPlayerDetailGet,
+                            sendPlayerAction = { uuid, action, value ->
+                                when (value) {
+                                    is Boolean -> channelClient.sendPlayerAction(uuid, action, value)
+                                    is String -> channelClient.sendPlayerAction(uuid, action, value)
+                                    else -> channelClient.sendPlayerAction(uuid, action, null)
+                                }
+                            },
+                            subscribeStats = channelClient::sendStatSubscribe,
+                            requestFileRoots = channelClient::requestFileRoots,
+                            requestFileList = channelClient::requestFileList,
+                            sendFileAction = channelClient::sendFileAction,
+                            uploadFile = { local, root, destination, overwrite ->
+                                channelClient.uploadFile(local, root, destination, overwrite)
+                            },
+                            downloadFile = channelClient::downloadFile,
+                            openFileEditor = channelClient::openFileEditor,
+                            saveEditedFile = channelClient::saveEditedFile,
+                            cancelFileTransfer = channelClient.fileTransfers::cancel,
+                            profiles = profiles,
                         ),
+                    profile = profile,
                 ),
             )
         }

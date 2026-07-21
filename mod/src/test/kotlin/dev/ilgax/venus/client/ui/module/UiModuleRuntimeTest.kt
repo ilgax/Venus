@@ -33,14 +33,14 @@ class UiModuleRuntimeTest {
 
     @Test
     fun `requirements reacquire after runtime clear`() {
-        var logs = 0
-        val runtime = UiModuleRuntime(UiDataActions(subscribeLogs = { logs++ }))
-        val console = listOf(UiModuleInstance("console", UiModuleType.CONSOLE_WORKFLOW))
+        var stats = 0
+        val runtime = UiModuleRuntime(UiDataActions(subscribeStats = { stats++ }))
+        val graph = listOf(UiModuleInstance("graph", UiModuleType.STAT_GRAPH))
 
-        runtime.activate(console)
+        runtime.activate(graph)
         runtime.clear()
-        runtime.activate(console)
+        runtime.activate(graph)
 
-        assertEquals(2, logs)
+        assertEquals(2, stats)
     }
 }
