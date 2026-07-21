@@ -1,5 +1,7 @@
 package dev.ilgax.venus.client.ui.profile
 
+import dev.ilgax.venus.client.ui.module.UiModuleRegistry
+
 object UiProfileValidator {
     const val MAX_PROFILES = 32
     const val MAX_PAGES = 24
@@ -61,6 +63,12 @@ object UiProfileValidator {
         require(theme.spacing in 0..32) { "Theme spacing is out of range" }
         require(theme.cornerRadius in 0..16) { "Theme corner radius is out of range" }
         require(theme.borderWidth in 0..4) { "Theme border width is out of range" }
+        require(theme.contentPadding in 4..32) { "Theme content padding is out of range" }
+        require(theme.rowHeight in 16..48) { "Theme row height is out of range" }
+        require(theme.controlHeight in 16..40) { "Theme control height is out of range" }
+        require(theme.cardPadding in 4..24) { "Theme card padding is out of range" }
+        require(theme.navigationSize in 72..240) { "Theme navigation size is out of range" }
+        require(theme.topBarHeight in 24..64) { "Theme top bar height is out of range" }
         require(theme.animationScale in 0f..4f) { "Theme animation scale is out of range" }
     }
 
@@ -85,6 +93,11 @@ object UiProfileValidator {
             require(placement.column >= 0 && placement.row >= 0) { "$mode layout position is negative" }
             require(placement.width > 0 && placement.height > 0) { "$mode layout size is invalid" }
             require(placement.column + placement.width <= mode.columns) { "$mode layout exceeds grid width" }
+            val module = profile.modules.first { it.id == placement.moduleId }
+            val minimum = UiModuleRegistry.builtIn.descriptor(module.type).minimum(mode)
+            require(placement.width >= minimum.width && placement.height >= minimum.height) {
+                "$mode layout module ${module.id} is below its minimum size"
+            }
         }
         layout.placements.groupBy { it.pageId }.values.forEach { placements ->
             placements.forEachIndexed { index, placement ->

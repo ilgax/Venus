@@ -1,4 +1,8 @@
+@file:Suppress("ktlint:standard:property-naming")
+
 package dev.ilgax.venus.client.ui.core
+
+import dev.ilgax.venus.client.ui.profile.UiTheme
 
 /**
  * Centralized Venus theme. One object holds every color, spacing token, and
@@ -9,32 +13,50 @@ package dev.ilgax.venus.client.ui.core
  */
 object VenusTheme {
     // ---- Backgrounds ----
-    const val BACKGROUND = 0xFF0A0E13.toInt()
-    const val WINDOW = 0xFF121821.toInt()
-    const val TOP_BAR = 0xFF0D1219.toInt()
-    const val SIDEBAR = 0xFF0F141B.toInt()
-    const val SURFACE = 0xFF161D27.toInt()
-    const val RAISED = 0xFF1C2430.toInt()
-    const val HOVER = 0xFF243040.toInt()
-    const val ACTIVE = 0xFF2F6F85.toInt()
-    const val BORDER = 0xFF2A3340.toInt()
-    const val BORDER_BRIGHT = 0xFF3A4658.toInt()
+    var BACKGROUND = 0xFF0A0E13.toInt()
+        private set
+    var WINDOW = 0xFF121821.toInt()
+        private set
+    var TOP_BAR = 0xFF0D1219.toInt()
+        private set
+    var SIDEBAR = 0xFF0F141B.toInt()
+        private set
+    var SURFACE = 0xFF161D27.toInt()
+        private set
+    var RAISED = 0xFF1C2430.toInt()
+        private set
+    var HOVER = 0xFF243040.toInt()
+        private set
+    var ACTIVE = 0xFF2F6F85.toInt()
+        private set
+    var BORDER = 0xFF2A3340.toInt()
+        private set
+    var BORDER_BRIGHT = 0xFF3A4658.toInt()
+        private set
 
     // ---- Accent ----
-    const val ACCENT = 0xFF2BD9E0.toInt()
-    const val ACCENT_DIM = 0xFF1A8B91.toInt()
-    const val ACCENT_MUTED = 0xFF147078.toInt()
+    var ACCENT = 0xFF2BD9E0.toInt()
+        private set
+    var ACCENT_DIM = 0xFF1A8B91.toInt()
+        private set
+    var ACCENT_MUTED = 0xFF147078.toInt()
+        private set
 
     // ---- Text ----
-    const val TEXT = 0xFFEAF1F8.toInt()
-    const val TEXT_MUTED = 0xFF8A99AC.toInt()
+    var TEXT = 0xFFEAF1F8.toInt()
+        private set
+    var TEXT_MUTED = 0xFF8A99AC.toInt()
+        private set
     const val TEXT_DISABLED = 0xFF4C5666.toInt()
     const val TEXT_ACCENT = 0xFF7BEDF2.toInt()
 
     // ---- Semantic ----
-    const val SUCCESS = 0xFF3DDC84.toInt()
-    const val WARNING = 0xFFFFB454.toInt()
-    const val DANGER = 0xFFFF5C6C.toInt()
+    var SUCCESS = 0xFF3DDC84.toInt()
+        private set
+    var WARNING = 0xFFFFB454.toInt()
+        private set
+    var DANGER = 0xFFFF5C6C.toInt()
+        private set
     const val DANGER_DIM = 0xFF8A2A33.toInt()
 
     // ---- Scrim/backdrop ----
@@ -48,18 +70,54 @@ object VenusTheme {
     const val CONSOLE_DEBUG = 0xFF8A99AC.toInt()
     const val CONSOLE_DEFAULT = 0xFFC8D3E0.toInt()
     const val CONSOLE_TIMESTAMP = 0xFF5A6678.toInt()
+
+    internal fun apply(theme: UiTheme) {
+        BACKGROUND = theme.background
+        WINDOW = theme.window
+        TOP_BAR = theme.topBar
+        SIDEBAR = theme.navigation
+        SURFACE = theme.surface
+        RAISED = theme.raised
+        HOVER = theme.hover
+        ACTIVE = theme.active
+        BORDER = theme.border
+        BORDER_BRIGHT = theme.border
+        ACCENT = theme.accent
+        ACCENT_DIM = theme.accent
+        ACCENT_MUTED = theme.accent
+        TEXT = theme.text
+        TEXT_MUTED = theme.textMuted
+        SUCCESS = theme.success
+        WARNING = theme.warning
+        DANGER = theme.danger
+    }
 }
 
 /**
  * Spacing scale. Small, predictable increments.
  */
 object VenusSpacing {
-    const val XS = 4
-    const val SM = 6
-    const val MD = 8
-    const val LG = 12
-    const val XL = 16
-    const val XXL = 24
+    var XS = 4
+        private set
+    var SM = 6
+        private set
+    var MD = 8
+        private set
+    var LG = 12
+        private set
+    var XL = 16
+        private set
+    var XXL = 24
+        private set
+
+    internal fun apply(theme: UiTheme) {
+        XS = UiThemeRuntime.scaled(4, theme)
+        SM = UiThemeRuntime.scaled(6, theme)
+        MD = UiThemeRuntime.scaled(8, theme)
+        LG = UiThemeRuntime.scaled(12, theme)
+        XL = UiThemeRuntime.scaled(16, theme)
+        XXL = UiThemeRuntime.scaled(24, theme)
+    }
 }
 
 /**
@@ -68,21 +126,26 @@ object VenusSpacing {
  */
 object VenusDimensions {
     // Window
-    const val TOP_BAR_HEIGHT = 36
+    var TOP_BAR_HEIGHT = 36
+        private set
     const val TOP_BAR_HEIGHT_COMPACT = 30
-    const val SIDEBAR_WIDTH = 128
+    var SIDEBAR_WIDTH = 128
+        private set
     const val SIDEBAR_WIDTH_COMPACT = 104
     const val WINDOW_MARGIN = 12
     const val WINDOW_MARGIN_COMPACT = 8
-    const val CONTENT_PADDING = 12
+    var CONTENT_PADDING = 12
+        private set
 
     // Rows & items
-    const val ROW_HEIGHT = 22
+    var ROW_HEIGHT = 22
+        private set
     const val ROW_HEIGHT_COMPACT = 18
     const val ROW_PADDING = 8
 
     // Controls
-    const val BUTTON_HEIGHT = 20
+    var BUTTON_HEIGHT = 20
+        private set
     const val INPUT_HEIGHT = 18
     const val TOGGLE_HEIGHT = 18
     const val TOGGLE_WIDTH = 32
@@ -90,7 +153,8 @@ object VenusDimensions {
     const val DROPDOWN_HEIGHT = 20
 
     // Cards & sections
-    const val CARD_PADDING = 10
+    var CARD_PADDING = 10
+        private set
     const val SECTION_GAP = 10
     const val SECTION_TITLE_GAP = 6
 
@@ -128,4 +192,13 @@ object VenusDimensions {
     const val ANIM_MODAL_MS = 150f
     const val ANIM_TOAST_MS = 220f
     const val ANIM_SIDEBAR_MS = 160f
+
+    internal fun apply(theme: UiTheme) {
+        TOP_BAR_HEIGHT = theme.topBarHeight
+        SIDEBAR_WIDTH = theme.navigationSize
+        CONTENT_PADDING = theme.contentPadding
+        ROW_HEIGHT = theme.rowHeight
+        BUTTON_HEIGHT = theme.controlHeight
+        CARD_PADDING = theme.cardPadding
+    }
 }

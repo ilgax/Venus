@@ -48,6 +48,12 @@ data class UiTheme(
     val spacing: Int = 8,
     val cornerRadius: Int = 0,
     val borderWidth: Int = 1,
+    val contentPadding: Int = 12,
+    val rowHeight: Int = 22,
+    val controlHeight: Int = 20,
+    val cardPadding: Int = 10,
+    val navigationSize: Int = 128,
+    val topBarHeight: Int = 36,
     val animationScale: Float = 1f,
 )
 
