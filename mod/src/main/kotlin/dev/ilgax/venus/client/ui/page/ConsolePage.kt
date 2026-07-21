@@ -46,8 +46,6 @@ class ConsolePage(
     private var clearBtnBounds: Bounds = Bounds(0, 0, 0, 0)
     private var pauseBtnBounds: Bounds = Bounds(0, 0, 0, 0)
     private var autoScrollBtnBounds: Bounds = Bounds(0, 0, 0, 0)
-    private var sourceBtnBounds: Bounds = Bounds(0, 0, 0, 0)
-    private var simpleLogger = true
 
     internal fun currentUiState(): ConsoleUiState =
         ConsoleUiState(
@@ -58,7 +56,6 @@ class ConsolePage(
             selection = if (selectedStart == null) null else selectionRange(),
             commandHistory = commandHistory.toList(),
             historyIndex = historyIndex,
-            simpleLogger = simpleLogger,
         )
 
     override fun layout(contentBounds: Bounds) {
@@ -86,11 +83,6 @@ class ConsolePage(
         val autoW = f.width(autoLabel) + 16
         bx -= autoW
         autoScrollBtnBounds = Bounds(bx, btnY, autoW, btnH)
-        bx -= VenusSpacing.SM
-        val sourceLabel = if (simpleLogger) "Simple" else "Full"
-        val sourceW = f.width(sourceLabel) + 16
-        bx -= sourceW
-        sourceBtnBounds = Bounds(bx, btnY, sourceW, btnH)
     }
 
     fun inputField(): VenusTextField? {
@@ -140,7 +132,6 @@ class ConsolePage(
         renderLabelButton(g, font, clearBtnBounds, "Clear", mouseX, mouseY)
         renderLabelButton(g, font, pauseBtnBounds, if (paused) "Resume" else "Pause", mouseX, mouseY)
         renderLabelButton(g, font, autoScrollBtnBounds, if (autoScroll) "Auto" else "Manual", mouseX, mouseY)
-        renderLabelButton(g, font, sourceBtnBounds, if (simpleLogger) "Simple" else "Full", mouseX, mouseY)
 
         val inputH = VenusDimensions.INPUT_HEIGHT
         val consoleBounds = Bounds(inner.x, inner.y + 24, inner.width, inner.height - 24 - inputH - VenusSpacing.SM)
@@ -221,7 +212,6 @@ class ConsolePage(
                     text = parsed.text,
                     logger = parsed.logger,
                     message = parsed.message,
-                    simpleLogger = simpleLogger,
                 ).render(
                     g,
                     font,
@@ -318,11 +308,6 @@ class ConsolePage(
             autoScroll = !autoScroll
             return true
         }
-        if (sourceBtnBounds.contains(mouseX, mouseY)) {
-            simpleLogger = !simpleLogger
-            return true
-        }
-
         val inputH = VenusDimensions.INPUT_HEIGHT
         val bounds = Bounds(inner.x, inner.y + 24, inner.width, inner.height - 24 - inputH - VenusSpacing.SM)
         if (bounds.contains(mouseX, mouseY)) {
@@ -419,5 +404,4 @@ internal data class ConsoleUiState(
     val selection: IntRange?,
     val commandHistory: List<String>,
     val historyIndex: Int?,
-    val simpleLogger: Boolean,
 )

@@ -103,7 +103,6 @@ class VenusConsoleLine(
     val text: String,
     val logger: String = "",
     val message: String = "",
-    val simpleLogger: Boolean = false,
 ) {
     fun render(
         g: GuiGraphics,
@@ -120,7 +119,7 @@ class VenusConsoleLine(
             VenusDraw.text(g, font, "[$timestamp]", x, bounds.y, VenusTheme.CONSOLE_TIMESTAMP, false)
             x += font.width("[$timestamp]") + VenusSpacing.SM
         }
-        if (simpleLogger && logger.isNotEmpty()) {
+        if (logger.isNotEmpty()) {
             val simplified = ConsoleLineParser.simplifyLoggerName(logger)
             val sourceLabel =
                 if (level.isNotEmpty()) {

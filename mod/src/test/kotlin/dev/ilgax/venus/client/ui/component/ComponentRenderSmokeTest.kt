@@ -6,6 +6,7 @@ import dev.ilgax.venus.client.ui.core.ModalKind
 import dev.ilgax.venus.client.ui.core.ToastKind
 import dev.ilgax.venus.client.ui.core.VenusModalRequest
 import dev.ilgax.venus.client.ui.core.VenusToastRequest
+import io.mockk.verify
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -47,7 +48,9 @@ class ComponentRenderSmokeTest : UiTestFixture() {
         listOf("INFO", "WARN", "ERROR", "DEBUG", "CUSTOM").forEach { level ->
             VenusConsoleLine(bounds, "12:00", level, "[$level] line").render(graphics, font, selected = true)
         }
-        VenusConsoleLine(bounds, "", "INFO", "line", "a.b.Logger", "message", simpleLogger = true).render(graphics, font)
+        VenusConsoleLine(bounds, "", "INFO", "full line", "a.b.Logger", "message").render(graphics, font)
+        verify { graphics.drawString(font, "[Logger/INFO]", any(), any(), any(), false) }
+        verify { graphics.drawString(font, "message", any(), any(), any(), false) }
     }
 
     @Test

@@ -69,6 +69,7 @@ class ConsolePageBehaviorTest : UiTestFixture() {
         assertTrue(page.mouseScrolled(20.0, 60.0, 0.0, -1.0))
         assertFalse(page.currentUiState().autoScroll)
 
+        assertFalse(page.mouseClicked(300.0, 15.0, 0))
         assertTrue(page.mouseClicked(400.0, 15.0, 0))
         assertTrue(page.currentUiState().paused)
         assertTrue(page.mouseClicked(450.0, 15.0, 0))
