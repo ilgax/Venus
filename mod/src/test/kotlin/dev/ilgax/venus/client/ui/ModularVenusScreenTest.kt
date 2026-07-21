@@ -4,6 +4,7 @@ import dev.ilgax.venus.client.ui.module.UiScreenServices
 import dev.ilgax.venus.client.ui.profile.FactoryUiProfile
 import dev.ilgax.venus.client.ui.profile.UiProfileController
 import dev.ilgax.venus.client.ui.profile.UiProfileStore
+import dev.ilgax.venus.keybind.PanelKeybind
 import io.mockk.verify
 import org.junit.Test
 import org.lwjgl.glfw.GLFW
@@ -30,6 +31,16 @@ class ModularVenusScreenTest : UiTestFixture() {
 
         assertTrue(screen.keyPressed(UiTestSupport.key(GLFW.GLFW_KEY_F6)))
         verify(exactly = 1) { minecraft.setScreen(null) }
+    }
+
+    @Test
+    fun `recovery chord opens protected factory safe mode`() {
+        assertTrue(PanelKeybind.matchesRecovery(UiTestSupport.key(GLFW.GLFW_KEY_F6, GLFW.GLFW_MOD_SHIFT)))
+
+        val screen = ModularVenusScreen(services(), FactoryUiProfile.profile, safeMode = true)
+        screen.initializeForJvmTest(1280, 720)
+
+        assertTrue(screen.isSafeModeForTest())
     }
 
     private fun services(): UiScreenServices =

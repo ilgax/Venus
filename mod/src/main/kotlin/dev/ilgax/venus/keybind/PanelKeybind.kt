@@ -3,7 +3,9 @@ package dev.ilgax.venus.keybind
 import com.mojang.blaze3d.platform.InputConstants
 import dev.ilgax.venus.channel.ChannelClient
 import dev.ilgax.venus.client.ui.ModularVenusScreen
+import dev.ilgax.venus.client.ui.editor.UiEditorScreen
 import dev.ilgax.venus.client.ui.module.UiScreenServices
+import dev.ilgax.venus.client.ui.profile.FactoryUiProfile
 import dev.ilgax.venus.client.ui.profile.UiProfileController
 import dev.ilgax.venus.state.SessionState
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
@@ -36,7 +38,11 @@ object PanelKeybind {
 
         ClientTickEvents.END_CLIENT_TICK.register { client ->
             while (keybind.consumeClick()) {
-                toggle(client, channelClient, profiles)
+                val window = client.window.handle()
+                val safeMode =
+                    GLFW.glfwGetKey(window, GLFW.GLFW_KEY_LEFT_SHIFT) == GLFW.GLFW_PRESS ||
+                        GLFW.glfwGetKey(window, GLFW.GLFW_KEY_RIGHT_SHIFT) == GLFW.GLFW_PRESS
+                toggle(client, channelClient, profiles, safeMode)
             }
         }
     }
@@ -51,46 +57,60 @@ object PanelKeybind {
         return keyEvent.modifiers() == 0 && keybind.matches(keyEvent)
     }
 
+    fun matchesRecovery(keyEvent: KeyEvent): Boolean = keyEvent.modifiers() and GLFW.GLFW_MOD_SHIFT != 0 && keybind.matches(keyEvent)
+
     private fun toggle(
         client: Minecraft,
         channelClient: ChannelClient,
         profiles: UiProfileController,
+        safeMode: Boolean,
     ) {
-        if (client.screen is ModularVenusScreen) {
+        val services = services(client, channelClient, profiles)
+        if (safeMode) {
+            client.setScreen(ModularVenusScreen(services, FactoryUiProfile.profile, safeMode = true))
+        } else if (client.screen is ModularVenusScreen || client.screen is UiEditorScreen) {
             client.setScreen(null)
         } else {
             val profile = profiles.resolve(SessionState.serverAddress)
-            client.setScreen(
-                ModularVenusScreen(
-                    services =
-                        UiScreenServices(
-                            sendConsoleCommand = channelClient::sendConsoleCommand,
-                            subscribeLogs = channelClient::sendLogSubscribe,
-                            requestPlayerList = channelClient::sendPlayerListGet,
-                            requestPlayerDetail = channelClient::sendPlayerDetailGet,
-                            sendPlayerAction = { uuid, action, value ->
-                                when (value) {
-                                    is Boolean -> channelClient.sendPlayerAction(uuid, action, value)
-                                    is String -> channelClient.sendPlayerAction(uuid, action, value)
-                                    else -> channelClient.sendPlayerAction(uuid, action, null)
-                                }
-                            },
-                            subscribeStats = channelClient::sendStatSubscribe,
-                            requestFileRoots = channelClient::requestFileRoots,
-                            requestFileList = channelClient::requestFileList,
-                            sendFileAction = channelClient::sendFileAction,
-                            uploadFile = { local, root, destination, overwrite ->
-                                channelClient.uploadFile(local, root, destination, overwrite)
-                            },
-                            downloadFile = channelClient::downloadFile,
-                            openFileEditor = channelClient::openFileEditor,
-                            saveEditedFile = channelClient::saveEditedFile,
-                            cancelFileTransfer = channelClient.fileTransfers::cancel,
-                            profiles = profiles,
-                        ),
-                    profile = profile,
-                ),
-            )
+            client.setScreen(ModularVenusScreen(services, profile))
         }
+    }
+
+    private fun services(
+        client: Minecraft,
+        channelClient: ChannelClient,
+        profiles: UiProfileController,
+    ): UiScreenServices {
+        lateinit var services: UiScreenServices
+        services =
+            UiScreenServices(
+                sendConsoleCommand = channelClient::sendConsoleCommand,
+                subscribeLogs = channelClient::sendLogSubscribe,
+                requestPlayerList = channelClient::sendPlayerListGet,
+                requestPlayerDetail = channelClient::sendPlayerDetailGet,
+                sendPlayerAction = { uuid, action, value ->
+                    when (value) {
+                        is Boolean -> channelClient.sendPlayerAction(uuid, action, value)
+                        is String -> channelClient.sendPlayerAction(uuid, action, value)
+                        else -> channelClient.sendPlayerAction(uuid, action, null)
+                    }
+                },
+                subscribeStats = channelClient::sendStatSubscribe,
+                requestFileRoots = channelClient::requestFileRoots,
+                requestFileList = channelClient::requestFileList,
+                sendFileAction = channelClient::sendFileAction,
+                uploadFile = { local, root, destination, overwrite ->
+                    channelClient.uploadFile(local, root, destination, overwrite)
+                },
+                downloadFile = channelClient::downloadFile,
+                openFileEditor = channelClient::openFileEditor,
+                saveEditedFile = channelClient::saveEditedFile,
+                cancelFileTransfer = channelClient.fileTransfers::cancel,
+                profiles = profiles,
+                openEditor = { profile ->
+                    client.setScreen(UiEditorScreen(services, profile, SessionState.serverAddress))
+                },
+            )
+        return services
     }
 }

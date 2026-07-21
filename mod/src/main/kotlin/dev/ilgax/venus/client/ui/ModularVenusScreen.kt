@@ -23,12 +23,15 @@ import dev.ilgax.venus.client.ui.page.ConsolePage
 import dev.ilgax.venus.client.ui.page.FilesPage
 import dev.ilgax.venus.client.ui.page.PlayersPage
 import dev.ilgax.venus.client.ui.page.SettingsOverviewPage
+import dev.ilgax.venus.client.ui.profile.FactoryUiProfile
 import dev.ilgax.venus.client.ui.profile.NavigationPlacement
 import dev.ilgax.venus.client.ui.profile.UiLayoutMode
 import dev.ilgax.venus.client.ui.profile.UiModuleInstance
 import dev.ilgax.venus.client.ui.profile.UiModuleType
 import dev.ilgax.venus.client.ui.profile.UiPageDefinition
 import dev.ilgax.venus.client.ui.profile.UiProfile
+import dev.ilgax.venus.client.ui.profile.UiProfileRecovery
+import dev.ilgax.venus.client.ui.profile.UiProfilesFile
 import dev.ilgax.venus.client.ui.render.VenusDraw
 import dev.ilgax.venus.keybind.PanelKeybind
 import dev.ilgax.venus.state.SessionState
@@ -90,6 +93,11 @@ class ModularVenusScreen(
         updateChildVisibility()
         if (!activated) {
             activateCurrentPage()
+            when (services.profiles.loadResult.recovery) {
+                UiProfileRecovery.BACKUP -> showToast("Recovered the last-good UI profiles backup")
+                UiProfileRecovery.FACTORY -> showToast("UI profiles were unreadable; Factory Default is active")
+                UiProfileRecovery.NONE -> Unit
+            }
             activated = true
         }
     }
@@ -266,8 +274,11 @@ class ModularVenusScreen(
         }
         val edit = editBounds()
         val close = closeBounds()
+        val reset = resetBounds()
+        if (safeMode) VenusDraw.rect(graphics, reset, if (reset.contains(mouseX, mouseY)) VenusTheme.HOVER else VenusTheme.RAISED)
         VenusDraw.rect(graphics, edit, if (edit.contains(mouseX, mouseY)) VenusTheme.HOVER else VenusTheme.RAISED)
         VenusDraw.rect(graphics, close, if (close.contains(mouseX, mouseY)) VenusTheme.HOVER else VenusTheme.RAISED)
+        if (safeMode) VenusDraw.textCentered(graphics, font, "Use Default", reset, VenusTheme.TEXT, false)
         VenusDraw.textCentered(graphics, font, "Edit", edit, VenusTheme.TEXT, false)
         VenusDraw.textCentered(graphics, font, "X", close, VenusTheme.DANGER, false)
     }
@@ -313,6 +324,8 @@ class ModularVenusScreen(
 
     private fun editBounds(): Bounds = Bounds(geometry.window.right - 78, geometry.window.y + 6, 44, 20)
 
+    private fun resetBounds(): Bounds = Bounds(geometry.window.right - 158, geometry.window.y + 6, 74, 20)
+
     private fun closeBounds(): Bounds = Bounds(geometry.window.right - 28, geometry.window.y + 6, 20, 20)
 
     override fun mouseClicked(
@@ -324,6 +337,11 @@ class ModularVenusScreen(
         val button = event.button()
         if (modal != null) return if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT) handleModalClick(mouseX, mouseY) else true
         if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+            if (safeMode && resetBounds().contains(mouseX, mouseY)) {
+                services.profiles.activate(UiProfilesFile.FACTORY_PROFILE_ID)
+                minecraft.setScreen(ModularVenusScreen(services, FactoryUiProfile.profile))
+                return true
+            }
             if (closeBounds().contains(mouseX, mouseY)) {
                 onClose()
                 return true
@@ -360,6 +378,10 @@ class ModularVenusScreen(
     }
 
     override fun keyPressed(event: KeyEvent): Boolean {
+        if (PanelKeybind.matchesRecovery(event)) {
+            minecraft.setScreen(ModularVenusScreen(services, FactoryUiProfile.profile, safeMode = true))
+            return true
+        }
         if (PanelKeybind.matches(event, focused is net.minecraft.client.gui.components.EditBox)) {
             onClose()
             return true
