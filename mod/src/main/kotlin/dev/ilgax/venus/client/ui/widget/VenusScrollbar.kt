@@ -4,91 +4,8 @@ import dev.ilgax.venus.client.ui.core.Bounds
 import dev.ilgax.venus.client.ui.core.VenusDimensions
 import dev.ilgax.venus.client.ui.core.VenusTheme
 import dev.ilgax.venus.client.ui.render.VenusDraw
-import net.minecraft.client.gui.Font
-import net.minecraft.client.gui.GuiGraphics
 import net.minecraft.client.input.MouseButtonEvent
 import org.lwjgl.glfw.GLFW
-
-/**
- * Sidebar navigation item. Shows an icon glyph + label, highlights when active
- * or hovered, supports keyboard activation. Not an AbstractWidget because
- * sidebar items are driven by the screen's own input loop (page navigation is
- * a screen-level concern, not a per-widget focus hop).
- */
-class VenusSidebarItem(
-    val page: dev.ilgax.venus.client.ui.core.VenusPage,
-    val label: String,
-    val icon: VenusIconButton.IconGlyph,
-) {
-    var bounds: Bounds = Bounds(0, 0, 0, 0)
-        private set
-
-    fun layout(b: Bounds) {
-        bounds = b
-    }
-
-    fun render(
-        g: GuiGraphics,
-        font: Font,
-        mouseX: Int,
-        mouseY: Int,
-        active: Boolean,
-    ) {
-        val hovered = bounds.contains(mouseX, mouseY)
-        val bg =
-            when {
-                active -> VenusTheme.ACTIVE
-                hovered -> VenusTheme.HOVER
-                else -> VenusTheme.SIDEBAR
-            }
-        VenusDraw.rect(g, bounds, bg)
-        if (active) {
-            VenusDraw.rect(g, bounds.x, bounds.y, 2, bounds.height, VenusTheme.ACCENT)
-        }
-
-        val iconColor = if (active) VenusTheme.ACCENT else VenusTheme.TEXT_MUTED
-        drawSidebarIcon(g, icon, bounds.x + 8, bounds.y + (bounds.height - 12) / 2, iconColor)
-
-        val textColor = if (active) VenusTheme.TEXT else VenusTheme.TEXT_MUTED
-        VenusDraw.text(g, font, label, bounds.x + 28, bounds.y + (bounds.height - font.lineHeight) / 2, textColor, false)
-    }
-
-    fun isClicked(
-        mouseX: Double,
-        mouseY: Double,
-    ): Boolean = bounds.contains(mouseX, mouseY)
-
-    private fun drawSidebarIcon(
-        g: GuiGraphics,
-        glyph: VenusIconButton.IconGlyph,
-        x: Int,
-        y: Int,
-        color: Int,
-    ) {
-        val s = 5
-        when (glyph) {
-            VenusIconButton.IconGlyph.SETTINGS -> {
-                g.fill(x, y + s, x + s * 2, y + s + 1, color)
-                g.fill(x + s, y, x + s + 1, y + s * 2, color)
-            }
-            VenusIconButton.IconGlyph.SEARCH -> {
-                g.fill(x, y, x + s, y + 1, color)
-                g.fill(x, y, x + 1, y + s, color)
-                g.fill(x + s - 1, y, x + s, y + s, color)
-                g.fill(x, y + s - 1, x + s, y + s, color)
-            }
-            VenusIconButton.IconGlyph.REFRESH -> {
-                g.fill(x, y, x + s * 2, y + 1, color)
-                g.fill(x, y, x + 1, y + s * 2, color)
-                g.fill(x + s * 2 - 1, y, x + s * 2, y + s * 2, color)
-                g.fill(x, y + s * 2 - 1, x + s * 2, y + s * 2, color)
-            }
-            else -> {
-                g.fill(x, y, x + s * 2, y + s * 2, color)
-            }
-        }
-    }
-}
 
 /**
  * Scrollbar metrics and drag math — pure, unit-testable.
@@ -163,7 +80,7 @@ class VenusScrollbar(
     private var dragging = false
 
     override fun drawVenus(
-        g: GuiGraphics,
+        g: net.minecraft.client.gui.GuiGraphics,
         mouseX: Int,
         mouseY: Int,
         partialTick: Float,
